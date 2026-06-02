@@ -3155,6 +3155,7 @@ if(success){
         let myPlaylistOriginalData = []; // 原始完整数据（用于显示被删除的频道）
         let myPlaylistConfig = {
             channelGroupMap: {},
+            channelRenameMap: {},
             channelOrder: {},
             hiddenChannels: [],
             customGroups: [],
@@ -3426,11 +3427,18 @@ if(success){
                 // 根据批量模式显示不同的操作按钮
                 if (isBatchMode) {
                     const selectedCount = selectedChannels.size;
+                    const batchMoveOpts = myPlaylistData.map(g => {
+                        const v = String(g.name).replace(/"/g, '&quot;');
+                        return `<option value="${v}">${g.name}</option>`;
+                    }).join('');
                     actions.innerHTML = `
                         <button class="btn btn-sm" onclick="selectAllChannels()">全选</button>
                         <button class="btn btn-sm" onclick="deselectAllChannels()">取消全选</button>
                         <button class="btn btn-warning btn-sm" onclick="hideSelectedChannels()" ${selectedCount === 0 ? 'disabled' : ''}>隐藏选中 (${selectedCount})</button>
                         <button class="btn btn-danger btn-sm" onclick="keepSelectedChannels()" ${selectedCount === 0 ? 'disabled' : ''}>只保留选中 (${selectedCount})</button>
+                        <span style="margin-left: 6px; color: #555; font-size: 13px;">移动选中到</span>
+                        <select id="batchMoveSelect" style="padding: 3px 6px; border-radius: 4px; border: 1px solid #ddd; max-width: 160px;" ${selectedCount === 0 ? 'disabled' : ''}>${batchMoveOpts}</select>
+                        <button class="btn btn-success btn-sm" onclick="moveSelectedChannels()" ${selectedCount === 0 ? 'disabled' : ''}>移动 (${selectedCount})</button>
                         <button class="btn btn-primary btn-sm" onclick="toggleBatchMode()">退出批量</button>
                     `;
                 } else {
@@ -4086,6 +4094,7 @@ if(success){
             const parts = [];
             if (resetRename) {
                 myPlaylistConfig.groupRenameMap = {};
+                myPlaylistConfig.channelRenameMap = {};
                 parts.push('重命名');
             }
             if (resetHidden) {
@@ -4196,6 +4205,49 @@ if(success){
             } catch (error) {
                 console.error('隐藏频道失败:', error);
                 showStatus('隐藏失败: ' + error.message, 'error');
+            }
+        }
+
+        // 批量把选中的频道移动到所选分组
+        async function moveSelectedChannels() {
+            if (selectedChannels.size === 0) return;
+            if (isViewingDeleted || myPlaylistData.length === 0 || selectedGroupIndex >= myPlaylistData.length) return;
+            const sel = document.getElementById('batchMoveSelect');
+            if (!sel) return;
+            const target = sel.value;
+            const group = myPlaylistData[selectedGroupIndex];
+            const originalGroupName = getOriginalGroupName(group.name);
+            const renamedOriginal = (myPlaylistConfig.groupRenameMap && myPlaylistConfig.groupRenameMap[originalGroupName]) || originalGroupName;
+
+            if (!myPlaylistConfig.channelGroupMap) myPlaylistConfig.channelGroupMap = {};
+            selectedChannels.forEach(channelId => {
+                const moveKey = `${originalGroupName}::${channelId}`;
+                if (target === renamedOriginal || target === originalGroupName) {
+                    // 移回原分组 = 取消归类
+                    delete myPlaylistConfig.channelGroupMap[moveKey];
+                } else {
+                    myPlaylistConfig.channelGroupMap[moveKey] = target;
+                }
+            });
+
+            try {
+                const n = selectedChannels.size;
+                const response = await fetch(API_PREFIX + '/api/my-playlist-config', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(myPlaylistConfig)
+                });
+                const result = await response.json();
+                if (result.success) {
+                    selectedChannels.clear();
+                    isBatchMode = false;
+                    await loadMyPlaylist(false);
+                    showStatus(`已移动 ${n} 个频道到「${target}」`, 'success');
+                } else {
+                    showStatus('移动失败', 'error');
+                }
+            } catch (error) {
+                showStatus('移动失败: ' + error.message, 'error');
             }
         }
 
@@ -4384,6 +4436,18 @@ if(success){
                         <div style="margin-top: 6px; color: #999; font-size: 12px;">将此频道单独归入所选分组（选回原分组即取消归类）</div>
                     </div>
                 `;
+
+                // 单频道重命名
+                const renameKey = `${groupName}::${channelId}`;
+                const currentName = (myPlaylistConfig.channelRenameMap && myPlaylistConfig.channelRenameMap[renameKey]) || channel.name || '';
+                detailHTML += `
+                    <div style="margin-bottom: 15px;">
+                        <strong style="color: #667eea;">重命名：</strong>
+                        <input id="channelRenameInput" type="text" value="${String(currentName).replace(/"/g, '&quot;')}" style="padding: 4px 8px; border-radius: 4px; border: 1px solid #ddd; max-width: 200px;">
+                        <button class="btn btn-sm btn-primary" style="margin-left: 8px;" onclick="renameCurrentChannel()">保存</button>
+                        <div style="margin-top: 6px; color: #999; font-size: 12px;">修改此频道的显示名（清空或改回原名即恢复；不影响 EPG 匹配）</div>
+                    </div>
+                `;
             }
 
             // 显示URL
@@ -4527,6 +4591,44 @@ if(success){
                 }
             } catch (error) {
                 showStatus('移动失败: ' + error.message, 'error');
+            }
+        }
+
+        // 重命名当前详情中的频道（单频道重命名）
+        async function renameCurrentChannel() {
+            if (!currentChannelDetail) return;
+            const inp = document.getElementById('channelRenameInput');
+            if (!inp) return;
+            const newName = inp.value.trim();
+            const groupName = currentChannelDetail.groupName; // 频道原始分组
+            const id = currentChannelDetail.id;
+            const renameKey = `${groupName}::${id}`;
+            const originalName = currentChannelDetail.name; // 原始名（来自未改写的原始数据）
+
+            if (!myPlaylistConfig.channelRenameMap) myPlaylistConfig.channelRenameMap = {};
+            if (!newName || newName === originalName) {
+                // 清空或改回原名 = 恢复
+                delete myPlaylistConfig.channelRenameMap[renameKey];
+            } else {
+                myPlaylistConfig.channelRenameMap[renameKey] = newName;
+            }
+
+            try {
+                const response = await fetch(API_PREFIX + '/api/my-playlist-config', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(myPlaylistConfig)
+                });
+                const result = await response.json();
+                if (result.success) {
+                    closeChannelDetail();
+                    await loadMyPlaylist(false);
+                    showStatus(newName && newName !== originalName ? `已重命名为「${newName}」` : '已恢复原名', 'success');
+                } else {
+                    showStatus('重命名失败: ' + (result.message || ''), 'error');
+                }
+            } catch (error) {
+                showStatus('重命名失败: ' + error.message, 'error');
             }
         }
 

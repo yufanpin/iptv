@@ -53,6 +53,8 @@ function interfaceStr(url, headers, urlUserId, urlToken) {
       // 这里改为按内容判断，并补上 groupRenameMap / customGroups
       if (config && (
         Object.keys(config.channelGroupMap || {}).length > 0 ||
+        Object.keys(config.channelRenameMap || {}).length > 0 ||
+        Object.keys(config.channelOrder || {}).length > 0 ||
         Object.keys(config.groupRenameMap || {}).length > 0 ||
         config.hiddenChannels?.length > 0 ||
         config.deletedGroups?.length > 0 ||

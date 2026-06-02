@@ -11,6 +11,7 @@ const CONFIG_PATH = dataPath('my-playlist-config.json')
  */
 const DEFAULT_CONFIG = {
   channelGroupMap: {},      // 单频道归类： "原始分组::频道ID" → 目标分组名
+  channelRenameMap: {},     // 单频道重命名： "原始分组::频道ID" → 新显示名
   channelOrder: {},         // 组内频道顺序： 显示分组名 → ["原始分组::频道ID", ...]
   hiddenChannels: [],       // 隐藏的频道ID列表
   customGroups: [],         // 自定义分组 [{name, order}]
@@ -256,6 +257,12 @@ export function applyConfig(groups, config) {
     channelMap.forEach((channel, key) => {
       // 频道标识：原始分组名::频道ID（与 hiddenChannels / channelGroupMap 同源，避免重命名/同名错乱）
       const channelKey = `${channel.originalGroup}::${channel.id}`
+
+      // 单频道重命名：覆盖显示名（只改 name，不动 tvgName，保 EPG 匹配）；channel 已是副本，可安全修改
+      const renamedName = config.channelRenameMap?.[channelKey]
+      if (renamedName) {
+        channel.name = renamedName
+      }
 
       // 跳过隐藏的频道（按分组独立隐藏）
       if (config.hiddenChannels?.includes(channelKey)) {
