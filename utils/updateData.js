@@ -67,6 +67,15 @@ async function updateTV(hours, options = {}) {
   let datas = await getAllChannels({ skipMigu, useCachedMigu: regenerateOnly })
   printGreen("电视频道-获取成功")
 
+  // 守卫：本次获取到 0 个频道（基本只会在咪咕/网络不可达时发生）。
+  // 此时绝不能用空结果覆盖上一次的好文件，否则「我的频道」会被清空且不自愈。
+  // 返回 false 通知上层 update() 跳过后续 PE 步骤，避免把体育缓存追加到旧文件造成污染。
+  const totalChannels = datas.reduce((sum, g) => sum + (g.dataList?.length || 0), 0)
+  if (totalChannels === 0) {
+    printRed("本次获取到 0 个频道（疑似咪咕/网络不可达），保留现有播放列表，不覆盖")
+    return false
+  }
+
   interfacePath = dataPath('interface.txt.bak')
   // txt
   interfaceTXTPath = dataPath('interfaceTXT.txt.bak')
@@ -281,7 +290,12 @@ async function updatePE(hours) {
  */
 async function runUpdate(hours, options = {}) {
   const { regenerateOnly = false } = options
-  await updateTV(hours, options)
+  const generated = await updateTV(hours, options)
+
+  // updateTV 因 0 频道（网络不可达）已保留旧文件并跳过生成 → 不再追加 PE，避免污染旧文件
+  if (generated === false) {
+    return
+  }
 
   if (!regenerateOnly) {
     await updatePE(hours)
