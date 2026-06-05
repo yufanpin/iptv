@@ -251,33 +251,26 @@ const EXTERNAL_SOURCES_PATH = dataPath('external-sources.json')
  */
 const BUILT_IN_SUBSCRIPTIONS = [
   {
-    name: '港澳地方频道',
+    name: '精选频道',
     group: '未分组',
     enabled: true,
     mode: 'subscription',
     m3u8Url: '',
     webUrl: '',
-    subscriptionUrl: 'https://raw.githubusercontent.com/YueChan/Live/refs/heads/main/GNTV.m3u',
+    subscriptionUrl: 'https://raw.githubusercontent.com/akiralereal/iptv/refs/heads/main/IPTV.m3u',
     parsedChannels: null,
     autoRefresh: true,
-    refreshInterval: 1440,
-    updateOnStartup: true,
-    lastUpdated: null
-  },
-  {
-    name: '全球频道',
-    group: '未分组',
-    enabled: true,
-    mode: 'subscription',
-    m3u8Url: '',
-    webUrl: '',
-    subscriptionUrl: 'https://raw.githubusercontent.com/YueChan/Live/refs/heads/main/Global.m3u',
-    parsedChannels: null,
-    autoRefresh: true,
-    refreshInterval: 1440,
+    refreshInterval: 360,
     updateOnStartup: true,
     lastUpdated: null
   }
+]
+
+// 已退役的内置订阅源 URL（曾经内置、现已移除）。启动时一次性从老用户配置中清除，
+// 避免「换掉常量 URL 后旧源仍残留、且因不在 BUILT_IN_SUBSCRIPTION_URLS 里而连开关都关不掉」的僵尸源问题。
+const RETIRED_SUBSCRIPTION_URLS = [
+  'https://raw.githubusercontent.com/YueChan/Live/refs/heads/main/GNTV.m3u',
+  'https://raw.githubusercontent.com/YueChan/Live/refs/heads/main/Global.m3u'
 ]
 
 function cloneBuiltInSubscription(entry) {
@@ -291,7 +284,7 @@ function isBuiltInSubscriptionSource(source) {
   return !!(source && source.subscriptionUrl && BUILT_IN_SUBSCRIPTION_URLS.has(source.subscriptionUrl))
 }
 
-// 播种内置订阅源（港澳/全球）。
+// 播种内置订阅源（精选频道）。
 // 关键改动：从「缺了就加回来」改为「只播种从未播种过的 URL」，用 config.seededBuiltInUrls 记录已播种集合。
 // 这样用户删除内置订阅后不会在重启时复活（修复 issue：默认源删不掉）。
 // enableBuiltInSubscriptions=false 时不再播种。
@@ -319,6 +312,23 @@ function ensureBuiltInSubscriptions(config) {
   return mutated
 }
 
+// 一次性退役迁移：把已退役的内置订阅源从用户配置中移除（用 retiredBuiltInsV1 标记，只跑一次，
+// 之后尊重用户的手动增删，与 seededBuiltInUrls 的「只播种一次」哲学一致）。
+function retireBuiltInSubscriptions(config) {
+  if (!config || !Array.isArray(config.sources)) return false
+  if (config.retiredBuiltInsV1) return false  // 已迁移过 → 不再处理
+  const before = config.sources.length
+  config.sources = config.sources.filter(s => !(s && RETIRED_SUBSCRIPTION_URLS.includes(s.subscriptionUrl)))
+  const removed = before - config.sources.length
+  if (removed > 0) printBlue(`移除已退役的内置订阅源 ${removed} 个（旧 YueChan 港澳/全球）`)
+  // 同步清理已播种账本里的退役 URL
+  if (Array.isArray(config.seededBuiltInUrls)) {
+    config.seededBuiltInUrls = config.seededBuiltInUrls.filter(u => !RETIRED_SUBSCRIPTION_URLS.includes(u))
+  }
+  config.retiredBuiltInsV1 = true
+  return true
+}
+
 /**
  * 外部频道源管理类
  */
@@ -341,6 +351,7 @@ class ExternalSourceManager {
         sources: seedSubs ? BUILT_IN_SUBSCRIPTIONS.map(cloneBuiltInSubscription) : [],
         // 记录已播种的内置订阅 URL（开启时为全部；关闭时为空，之后开启会按需补齐一次）
         seededBuiltInUrls: seedSubs ? BUILT_IN_SUBSCRIPTIONS.map(b => b.subscriptionUrl) : [],
+        retiredBuiltInsV1: true, // 新装无需退役迁移，直接标记已处理
         updateInterval: 60,
         lastGlobalUpdate: null
       }
@@ -362,8 +373,9 @@ class ExternalSourceManager {
           updateInterval: 60,
           lastGlobalUpdate: null
         }
+        const retired = retireBuiltInSubscriptions(config)
         const mutated = ensureBuiltInSubscriptions(config)
-        if (mutated) this.saveSources(config)
+        if (retired || mutated) this.saveSources(config)
         return config
       }
       if (typeof parsed === 'object' && parsed !== null) {
@@ -382,8 +394,9 @@ class ExternalSourceManager {
           updateOnStartup: s.updateOnStartup !== false
         }))
         // 播种内置订阅源（只播种从未播种过的；尊重用户删除）
+        const retired = retireBuiltInSubscriptions(parsed)
         const mutated = ensureBuiltInSubscriptions(parsed)
-        if (mutated) this.saveSources(parsed)
+        if (retired || mutated) this.saveSources(parsed)
         return parsed
       }
       return { enabled: false, includeInPlaylists: true, updateOnStartup: true, sources: [] }

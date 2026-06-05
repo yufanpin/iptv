@@ -80,7 +80,7 @@ function applyConfig(systemConfig) {
   enableMigu = systemConfig.enableMigu !== undefined ? systemConfig.enableMigu : parseBool(process.env.menableMigu, defOn)
   // 内置单频道源（built-in-sources.json：纬来体育/RedBull/4K卫视等）
   enableBuiltInSources = systemConfig.enableBuiltInSources !== undefined ? systemConfig.enableBuiltInSources : parseBool(process.env.menableBuiltInSources, defOn)
-  // 内置订阅源（港澳地方频道 / 全球频道）
+  // 内置订阅源（精选频道）
   enableBuiltInSubscriptions = systemConfig.enableBuiltInSubscriptions !== undefined ? systemConfig.enableBuiltInSubscriptions : parseBool(process.env.menableBuiltInSubscriptions, defOn)
 }
 
