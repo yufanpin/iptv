@@ -24,7 +24,7 @@
   </tr>
 </table>
 
-**当前版本：v2.2.0**
+**当前版本：v2.2.1**
 
 > 一个基于 Docker 部署的 IPTV 直播源管理和分发系统，支持 GUI 管理，内置咪咕视频源抓取，支持外部直播源管理及自定义直播源订阅。
 >
@@ -179,6 +179,10 @@ docker run -d -p 1905:1905 \
 ---
 
 ## 📋 更新日志
+
+### v2.2.1 (2026-06-05)
+- 🛠️ **核心内容开关独立成组**：管理后台「系统配置」中的「启用咪咕源 / 内置单频道源 / 内置订阅源」三项从常规配置里独立出来，做成醒目的「🔑 核心内容开关」卡片（红色描边、标注默认开启并提示谨慎关闭），与端口 / 密码等普通配置项形成 UI 区分，降低误关导致频道大幅减少甚至空白的概率
+- 🗑️ **移除后台「🧹 一键空白」按钮**：该按钮仅是一次性勾掉上述三个开关、易误触，且与单独勾选重复，本版移除；需要空白部署仍可用环境变量 `mblank` 或手动关闭三个开关实现
 
 ### v2.2.0 (2026-06-05)
 - 🆕 **订阅源支持 txt 格式**：订阅模式现自动识别播放列表格式，除 m3u/m3u8 外也支持 txt（diyp/TVBox：`分组,#genre#` / `频道名,地址`，一个频道用 `#` 连多个备用源时取首个），无需额外设置；兼容 GBK/GB2312 编码
@@ -725,26 +729,38 @@ $Env:mport=1905; $Env:mhost="http://localhost:1905"; node app.js
 详情请查看仓库根目录下的 `LICENSE` 文件。
 
 <!--
-## 🔖 版本发布
+## 🔖 版本发布（维护者流程）
 
-使用 `bump-version.js` 脚本统一管理版本号（自动更新 `package.json`、`package-lock.json`、`web/admin.html`、`README.md`、`.github/workflows/push_docker.yaml`）。
+使用 `bump-version.js` 脚本统一管理版本号，一条命令同步更新 5 个文件：`package.json`、`package-lock.json`、`web/admin.html`（页脚版本号）、`README.md`（标题版本 + 在更新日志顶部插入占位条目）、`.github/workflows/push_docker.yaml`（三个 Docker 镜像标签）。
 
 ```bash
-# 1. 更新版本号（自动修改 5 个文件）
-node bump-version.js patch          # 1.4.3 → 1.4.4
-node bump-version.js minor          # 1.4.3 → 1.5.0
-node bump-version.js major          # 1.4.3 → 2.0.0
-node bump-version.js 2.0.0          # 直接指定版本
+# 0. 发布前自检：本地起服务、点一遍核心功能，确认无报错再发
+node app.js
 
-# 2. 编辑 README.md 填写更新日志（脚本已自动插入占位条目）
+# 1. 更新版本号（自动修改上述 5 个文件，并在更新日志顶部插入 ### vX.Y.Z 占位条目）
+node bump-version.js patch          # 2.2.1 → 2.2.2（bug 修复 / 小调整）
+node bump-version.js minor          # 2.2.1 → 2.3.0（向后兼容的新功能）
+node bump-version.js major          # 2.2.1 → 3.0.0（不兼容变更）
+node bump-version.js 2.2.1          # 直接指定版本号
 
-# 3. 提交并打 tag
+# 2. 编辑 README.md 填写更新日志：把脚本插入的空 `- ` 占位补成面向用户的条目
+
+# 3. 提交并打 tag（tag 名须与版本号一致，带 v 前缀）
 git add -A && git commit -m "release: vX.Y.Z"
 git tag vX.Y.Z
 
-# 4. 推送到 GitHub，手动触发 Actions 构建 Docker 镜像
+# 4. 推送代码与 tag —— Actions 依赖 tag 触发构建并推送 Docker 镜像
 git push && git push --tags
 ```
+
+**注意事项**
+
+- **版本号语义**：bug 修复 / 小调整用 `patch`，向后兼容的新功能用 `minor`，不兼容变更用 `major`。
+- **更新日志面向用户写**：写「改了什么、对用户有什么影响」，而非内部实现；沿用现有 emoji 前缀（🆕 新功能 / 🛠️ 改进 / 🐛 修复 / 🔧 配置 / 🔒 安全 / ⚡ 性能 / 🗑️ 移除），标题加粗。
+- **核对日期**：脚本用运行时系统日期生成 `### vX.Y.Z (YYYY-MM-DD)` 标题，跨天发布或时区异常时手动改正。
+- **Docker 三个标签**：每版镜像会打 `:X.Y.Z`（精确）、`:X.Y`（次版本滚动）、`:X`（主版本滚动）。主版本标签曾长期漏更新、错打成 `:1`，已在 v2.2.0 修复——升 major 后务必确认 `:X` 已正确更新。
+- **tag 不能漏**：镜像构建依赖 tag，记得 `git tag` 且 `git push --tags`；只推代码、忘推 tag 不会触发构建。
+- **重启生效项**：监听端口、节目单更新间隔等改动需用户重启容器后才生效；本次若涉及，请在更新日志里提醒用户。
 -->
 
 

@@ -942,6 +942,69 @@
             font-size: 13px;
         }
 
+        /* 核心内容开关：默认开启，单独成组并强调谨慎关闭 */
+        .content-switches {
+            border: 1px solid #ffccc7;
+            border-radius: 8px;
+            background: #fff;
+            margin-bottom: 20px;
+            overflow: hidden;
+        }
+
+        .content-switches-header {
+            background: #fff1f0;
+            border-bottom: 1px solid #ffccc7;
+            padding: 12px 16px;
+        }
+
+        .content-switches-header .cs-title {
+            font-size: 14px;
+            font-weight: 600;
+            color: #cf1322;
+            display: flex;
+            align-items: center;
+            gap: 6px;
+        }
+
+        .content-switches-header .cs-tip {
+            font-size: 12px;
+            color: #ad6800;
+            margin-top: 6px;
+            line-height: 1.6;
+        }
+
+        .content-switch-item {
+            padding: 14px 16px;
+            border-bottom: 1px solid #f7e0de;
+        }
+
+        .content-switch-item:last-child {
+            border-bottom: none;
+        }
+
+        .content-switch-item > label {
+            display: flex;
+            align-items: center;
+            font-size: 14px;
+            font-weight: 600;
+            color: #333;
+            cursor: pointer;
+            margin-bottom: 4px;
+        }
+
+        .content-switch-item input[type="checkbox"] {
+            margin-right: 8px;
+            width: 16px;
+            height: 16px;
+            cursor: pointer;
+            flex-shrink: 0;
+        }
+
+        .content-switch-item .system-config-hint {
+            margin-left: 24px;
+            margin-top: 2px;
+        }
+
         .bookmarklet-section {
             background: #e6f7ff;
             border: 1px solid #91d5ff;
@@ -1782,27 +1845,6 @@
                         <input type="text" id="sysAdminPath" placeholder="admin">
                         <div class="system-config-hint">自定义后台地址（默认 admin），如填 <code>console</code> 则用 <code>/console</code> 访问，<code>/admin</code> 将失效；保存后需用新地址访问（api / player / favicon.ico 为保留字）</div>
                     </div>
-                    <div class="system-config-item">
-                        <label>
-                            <input type="checkbox" id="sysEnableMigu">
-                            启用咪咕源（核心）
-                        </label>
-                        <div class="system-config-hint">关闭后不抓取咪咕频道 / 体育赛事 / EPG，仅用内置与外部源（适合纯自定义源、空白部署）</div>
-                    </div>
-                    <div class="system-config-item">
-                        <label>
-                            <input type="checkbox" id="sysEnableBuiltInSources">
-                            启用内置单频道源
-                        </label>
-                        <div class="system-config-hint">自带的 纬来体育 / Red Bull / 4K卫视 等；关闭后不加载也不抓取（省启动资源）</div>
-                    </div>
-                    <div class="system-config-item">
-                        <label>
-                            <input type="checkbox" id="sysEnableBuiltInSubscriptions">
-                            启用内置订阅源
-                        </label>
-                        <div class="system-config-hint">自带的 港澳地方频道 / 全球频道；关闭后不加入（已添加的可在"源管理"删除，删后不再复活）</div>
-                    </div>
                     <div class="system-config-item" style="display: none;">
                         <label>节目单更新间隔（小时）</label>
                         <input type="number" id="sysProgramInterval" placeholder="6">
@@ -1820,9 +1862,35 @@
                         </label>
                     </div>
                 </div>
+                <div class="content-switches">
+                    <div class="content-switches-header">
+                        <div class="cs-title">🔑 核心内容开关（默认开启）</div>
+                        <div class="cs-tip">以下三项默认开启，是平台的主要内容来源。关闭后对应内容将不再加载，可能导致频道大幅减少甚至空白平台，请确认了解影响后再谨慎关闭。</div>
+                    </div>
+                    <div class="content-switch-item">
+                        <label>
+                            <input type="checkbox" id="sysEnableMigu">
+                            启用咪咕源（核心）
+                        </label>
+                        <div class="system-config-hint">关闭后不抓取咪咕频道 / 体育赛事 / EPG，仅用内置与外部源（适合纯自定义源、空白部署）</div>
+                    </div>
+                    <div class="content-switch-item">
+                        <label>
+                            <input type="checkbox" id="sysEnableBuiltInSources">
+                            启用内置单频道源
+                        </label>
+                        <div class="system-config-hint">自带的 纬来体育 / Red Bull / 4K卫视 等；关闭后不加载也不抓取（省启动资源）</div>
+                    </div>
+                    <div class="content-switch-item">
+                        <label>
+                            <input type="checkbox" id="sysEnableBuiltInSubscriptions">
+                            启用内置订阅源
+                        </label>
+                        <div class="system-config-hint">自带的 港澳地方频道 / 全球频道；关闭后不加入（已添加的可在"源管理"删除，删后不再复活）</div>
+                    </div>
+                </div>
                 <div class="system-config-actions">
                     <button class="btn btn-success" onclick="saveSystemConfig()">💾 保存系统配置</button>
-                    <button class="btn" onclick="applyBlankMode()" title="关闭咪咕 + 内置单频道源 + 内置订阅源，得到空白平台（需点保存生效）">🧹 一键空白</button>
                 </div>
                 <div style="margin-top: 12px; padding: 10px; background: #f0f0f0; border-radius: 4px; font-size: 13px; color: #666; text-align: center;">
                     💡 提示：保存配置后，需点击页面顶部的"重启服务"按钮使新配置生效
@@ -1844,7 +1912,7 @@
                                 <strong style="color: #333; font-size: 16px;">当前版本</strong>
                             </div>
                             <div style="padding-left: 30px; display: flex; align-items: center; gap: 12px; flex-wrap: wrap;">
-                                <span id="versionText" style="font-size: 15px; color: #333; font-weight: 600;">v2.2.0</span>
+                                <span id="versionText" style="font-size: 15px; color: #333; font-weight: 600;">v2.2.1</span>
                                 <button class="btn btn-sm" onclick="checkUpdate()" id="checkUpdateBtn">检查更新</button>
                             </div>
                             <div id="updateInfo" style="padding-left: 30px; margin-top: 8px; font-size: 13px; display: none;"></div>
@@ -3086,14 +3154,6 @@ if(success){
         }
 
         // 保存系统配置
-        // 一键空白：关闭三项内容开关（仅前端勾选，需点"保存系统配置"才生效）
-        function applyBlankMode() {
-            document.getElementById('sysEnableMigu').checked = false;
-            document.getElementById('sysEnableBuiltInSources').checked = false;
-            document.getElementById('sysEnableBuiltInSubscriptions').checked = false;
-            showStatus('已勾选为空白模式（关闭咪咕 + 内置源 + 内置订阅），点击"💾 保存系统配置"生效', 'info');
-        }
-
         async function saveSystemConfig() {
             try {
                 const port = parseInt(document.getElementById('sysPort').value) || 1905;
