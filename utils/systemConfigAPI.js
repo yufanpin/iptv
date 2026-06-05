@@ -1,10 +1,12 @@
 import { readFileSync, existsSync } from "node:fs"
 import { writeJsonFileSync } from "./fileUtil.js"
 import { dataPath } from "./paths.js"
+import update from "./updateData.js"
 import {
   reloadConfig, sanitizeSegment,
   userId, token, port, host, rateType, pass,
-  enableHDR, enableH265, programInfoUpdateInterval, refreshToken, adminPath
+  enableHDR, enableH265, programInfoUpdateInterval, refreshToken, adminPath,
+  enableMigu, enableBuiltInSources, enableBuiltInSubscriptions
 } from "../config.js"
 
 const SYSTEM_CONFIG_PATH = dataPath('system-config.json')
@@ -24,7 +26,17 @@ const ENV_KEY_MAP = {
   enableH265: 'menableH265',
   programInfoUpdateInterval: 'mupdateInterval',
   refreshToken: 'mrefreshToken',
-  adminPath: 'madminPath'
+  adminPath: 'madminPath',
+  enableMigu: 'menableMigu',
+  enableBuiltInSources: 'menableBuiltInSources',
+  enableBuiltInSubscriptions: 'menableBuiltInSubscriptions'
+}
+
+// 解析环境变量布尔（与 config.js parseBool 同义）：用于判断 mblank 空白模式是否由 env 开启
+function envBool(value) {
+  if (value === undefined || value === null || value === '') return false
+  const s = String(value).trim().toLowerCase()
+  return s !== 'false' && s !== '0' && s !== 'off' && s !== 'no'
 }
 
 export function getSystemConfigAPI() {
@@ -54,9 +66,14 @@ export function getSystemConfigAPI() {
         enableH265,
         programInfoUpdateInterval,
         refreshToken,
-        adminPath
+        adminPath,
+        enableMigu,
+        enableBuiltInSources,
+        enableBuiltInSubscriptions
       },
-      envOverrides
+      envOverrides,
+      // 空白模式总开关是否由环境变量 mblank 开启（前端据此提示：内容开关默认关闭，可在此单独打开覆盖）
+      blankModeEnv: envBool(process.env.mblank)
     }
   } catch (error) {
     return {
@@ -100,14 +117,27 @@ export function saveSystemConfigAPI(config) {
       // 清洗为合法路径段（非法/保留字回退 admin），保证存储值与运行时一致
       validated.adminPath = sanitizeSegment(config.adminPath, 'admin')
     }
+    // 内容开关：显式提交才写入（避免不带这些字段的旧调用把它们重置）
+    if (config.enableMigu !== undefined) {
+      validated.enableMigu = config.enableMigu !== false
+    }
+    if (config.enableBuiltInSources !== undefined) {
+      validated.enableBuiltInSources = config.enableBuiltInSources !== false
+    }
+    if (config.enableBuiltInSubscriptions !== undefined) {
+      validated.enableBuiltInSubscriptions = config.enableBuiltInSubscriptions !== false
+    }
 
     // 原子写入，避免并发保存 / 写入中断损坏文件
     writeJsonFileSync(SYSTEM_CONFIG_PATH, validated)
     // 热更新配置：除端口和更新间隔外即时生效，无需重启
     reloadConfig()
+    // 内容开关（咪咕/内置源/内置订阅）影响频道列表，触发一次后台重新生成播放列表使其即时生效。
+    // fire-and-forget：不阻塞保存响应；update() 内部 updateQueue 串行化，并发安全。
+    update(0, { regenerateOnly: true }).catch(err => console.error('重新生成播放列表失败:', err))
     return {
       success: true,
-      message: '配置保存成功（端口与更新间隔需重启生效，其余已即时生效）'
+      message: '配置保存成功（端口与更新间隔需重启生效；内容开关等已即时生效，播放列表正在后台刷新）'
     }
   } catch (error) {
     return {

@@ -1,7 +1,7 @@
 import { getAllChannels, updateExternalSources, updateBuiltInSources, externalSourceManager } from "./channelMerger.js"
 import { appendFile, appendFileSync, copyFileSync, renameFileSync, writeFile, writeFileSync } from "./fileUtil.js"
 import { updatePlaybackData } from "./playback.js"
-import { refreshToken as enableTokenRefresh, host, pass, token, userId } from "../config.js"
+import { refreshToken as enableTokenRefresh, host, pass, token, userId, enableMigu } from "../config.js"
 import refreshToken from "./refreshToken.js"
 import { printGreen, printRed, printYellow, printBlue } from "./colorOut.js"
 import { getDateString } from "./time.js"
@@ -72,8 +72,13 @@ async function updateTV(hours, options = {}) {
   // 返回 false 通知上层 update() 跳过后续 PE 步骤，避免把体育缓存追加到旧文件造成污染。
   const totalChannels = datas.reduce((sum, g) => sum + (g.dataList?.length || 0), 0)
   if (totalChannels === 0) {
-    printRed("本次获取到 0 个频道（疑似咪咕/网络不可达），保留现有播放列表，不覆盖")
-    return false
+    // 咪咕启用时：0 频道基本只会在咪咕/网络不可达时发生，绝不能用空结果覆盖上一次的好文件。
+    if (enableMigu) {
+      printRed("本次获取到 0 个频道（疑似咪咕/网络不可达），保留现有播放列表，不覆盖")
+      return false
+    }
+    // 咪咕已禁用：0/少 频道是合法状态（纯外部源用户、或尚未添加任何源），允许按空白/纯外部源生成，避免卡在旧文件且不自愈。
+    printYellow("咪咕已禁用，本次按空白 / 纯外部源处理（生成的播放列表可能为空）")
   }
 
   interfacePath = dataPath('interface.txt.bak')
@@ -84,8 +89,8 @@ async function updateTV(hours, options = {}) {
   // txt
   writeFileSync(interfaceTXTPath, "")
 
-  if (!(hours % 720)) {
-    // 每720小时(一个月)刷新token
+  if (enableMigu && !(hours % 720)) {
+    // 每720小时(一个月)刷新token（咪咕禁用时无需刷新）
     if (userId != "" && token != "") {
       if (enableTokenRefresh) {
         await refreshToken(userId, token) ? printGreen("token刷新成功") : printRed("token刷新失败")
@@ -297,7 +302,9 @@ async function runUpdate(hours, options = {}) {
     return
   }
 
-  if (!regenerateOnly) {
+  if (!enableMigu) {
+    // 咪咕已禁用：体育赛事为纯咪咕 API，整体跳过；也不回填 pe-cache，避免分发指向失效 pID 的旧赛事
+  } else if (!regenerateOnly) {
     await updatePE(hours)
   } else {
     // regenerateOnly 模式：updateTV 已重建 interface.txt，需将上次缓存的体育赛事内容追加回去

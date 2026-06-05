@@ -2,7 +2,7 @@ import http from "node:http"
 import { readFileSync } from "node:fs"
 import { createRequire } from "node:module"
 import fetch from 'node-fetch'
-import { adminPath, host, pass, port, programInfoUpdateInterval, token, userId } from "./config.js";
+import { adminPath, host, pass, port, programInfoUpdateInterval, token, userId, enableMigu, enableBuiltInSubscriptions } from "./config.js";
 import { getDateTimeStr } from "./utils/time.js";
 import update from "./utils/updateData.js";
 import { printBlue, printGreen, printMagenta, printRed, printYellow } from "./utils/colorOut.js";
@@ -13,7 +13,7 @@ import { getChannelsAPI, getExternalSourcesAPI, saveExternalSourcesAPI,
 import { getSystemConfigAPI, saveSystemConfigAPI } from "./utils/systemConfigAPI.js";
 import { readConfig, saveConfig, parseInterfaceTxt, validateGroupConfig, applyConfig } from "./utils/playlistConfig.js";
 import { updateBuiltInSources, updateExternalSources, externalSourceManager } from "./utils/channelMerger.js";
-import { GITHUB_RAW_MIRRORS } from "./utils/externalSources.js";
+import { GITHUB_RAW_MIRRORS, isBuiltInSubscriptionSource } from "./utils/externalSources.js";
 
 // 运行时长
 var hours = 0
@@ -118,8 +118,8 @@ const server = http.createServer(async (req, res) => {
       printBlue("API: 获取系统配置")
       const result = getSystemConfigAPI()
       res.writeHead(200, { 'Content-Type': 'application/json;charset=UTF-8' });
-      // 附带 envOverrides（哪些项被环境变量控制），供前端提示；不影响表单字段读取
-      res.end(JSON.stringify(result.success ? { ...result.data, envOverrides: result.envOverrides || {} } : {}));
+      // 附带 envOverrides（哪些项被环境变量控制）与 blankModeEnv（是否 mblank 空白模式），供前端提示；不影响表单字段读取
+      res.end(JSON.stringify(result.success ? { ...result.data, envOverrides: result.envOverrides || {}, blankModeEnv: !!result.blankModeEnv } : {}));
       return
     }
 
@@ -490,12 +490,14 @@ server.listen(port, async () => {
       const sources = externalSourceManager.sources?.sources || []
       const failedSubs = sources.filter((s, i) =>
         s.enabled && s.mode === 'subscription' && s.subscriptionUrl && !Array.isArray(s.parsedChannels)
+        && (enableBuiltInSubscriptions || !isBuiltInSubscriptionSource(s))  // 内置订阅禁用时不重试
       )
       if (failedSubs.length > 0) {
         printYellow(`检测到 ${failedSubs.length} 个订阅源未成功获取，正在重试...`)
         for (let i = 0; i < sources.length; i++) {
           const s = sources[i]
-          if (s.enabled && s.mode === 'subscription' && s.subscriptionUrl && !Array.isArray(s.parsedChannels)) {
+          if (s.enabled && s.mode === 'subscription' && s.subscriptionUrl && !Array.isArray(s.parsedChannels)
+            && (enableBuiltInSubscriptions || !isBuiltInSubscriptionSource(s))) {
             await externalSourceManager.updateSubscriptionSource(i)
           }
         }
@@ -517,7 +519,9 @@ server.listen(port, async () => {
   if (host != "") {
     printGreen(`自定义地址: ${host}${pass == "" ? "" : "/" + pass}`)
   }
-  if (userId === "" || token === "") {
+  if (!enableMigu) {
+    printYellow("咪咕源已禁用（enableMigu=false），当前为纯频道管理模式，仅分发内置/外部源")
+  } else if (userId === "" || token === "") {
     printYellow("当前为游客模式（未配置咪咕账号），咪咕频道最高画质为 720p")
   }
 })

@@ -41,6 +41,8 @@ function sanitizeSegment(value, fallback) {
 // 注意：port、programInfoUpdateInterval 在 server.listen / setInterval 时已被读取，
 // 热更新不会改变已启动的监听端口与定时器周期，这两项仍需重启生效。
 let userId, token, port, host, rateType, debug, pass, enableHDR, enableH265, programInfoUpdateInterval, refreshToken, adminPath
+// 内容开关：咪咕核心 / 内置单频道源 / 内置订阅源。默认全开（老用户零感知）
+let enableMigu, enableBuiltInSources, enableBuiltInSubscriptions
 
 function applyConfig(systemConfig) {
   // 用户id
@@ -69,6 +71,17 @@ function applyConfig(systemConfig) {
   refreshToken = systemConfig.refreshToken !== undefined ? systemConfig.refreshToken : parseBool(process.env.mrefreshToken, true)
   // 管理页面自定义路径（默认 admin）：改名后用 /<adminPath> 访问后台，裸 /admin 失效
   adminPath = sanitizeSegment(systemConfig.adminPath || process.env.madminPath, 'admin')
+
+  // 空白模式总开关：开启后下面三项内容开关「默认」翻转为关（一行得到空白 docker）。
+  // 优先级：细粒度开关显式值 > 总开关推出的默认 > 全开。所以可 mblank=true + menableMigu=true 单独留咪咕。
+  const blank = parseBool(systemConfig.blank ?? process.env.mblank, false)
+  const defOn = !blank
+  // 咪咕核心（CCTV/卫视抓取 + 体育赛事 + EPG + token刷新）
+  enableMigu = systemConfig.enableMigu !== undefined ? systemConfig.enableMigu : parseBool(process.env.menableMigu, defOn)
+  // 内置单频道源（built-in-sources.json：纬来体育/RedBull/4K卫视等）
+  enableBuiltInSources = systemConfig.enableBuiltInSources !== undefined ? systemConfig.enableBuiltInSources : parseBool(process.env.menableBuiltInSources, defOn)
+  // 内置订阅源（港澳地方频道 / 全球频道）
+  enableBuiltInSubscriptions = systemConfig.enableBuiltInSubscriptions !== undefined ? systemConfig.enableBuiltInSubscriptions : parseBool(process.env.menableBuiltInSubscriptions, defOn)
 }
 
 applyConfig(loadSystemConfig())
@@ -76,7 +89,7 @@ applyConfig(loadSystemConfig())
 // 重新加载系统配置（保存系统配置后调用，避免必须重启进程）
 function reloadConfig() {
   applyConfig(loadSystemConfig())
-  return { userId, token, port, host, rateType, pass, enableHDR, enableH265, programInfoUpdateInterval, refreshToken, adminPath }
+  return { userId, token, port, host, rateType, pass, enableHDR, enableH265, programInfoUpdateInterval, refreshToken, adminPath, enableMigu, enableBuiltInSources, enableBuiltInSubscriptions }
 }
 
-export { userId, token, port, host, rateType, debug, pass, enableHDR, programInfoUpdateInterval, enableH265, refreshToken, adminPath, reloadConfig, sanitizeSegment }
+export { userId, token, port, host, rateType, debug, pass, enableHDR, programInfoUpdateInterval, enableH265, refreshToken, adminPath, enableMigu, enableBuiltInSources, enableBuiltInSubscriptions, reloadConfig, sanitizeSegment }

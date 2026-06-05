@@ -1782,6 +1782,27 @@
                         <input type="text" id="sysAdminPath" placeholder="admin">
                         <div class="system-config-hint">自定义后台地址（默认 admin），如填 <code>console</code> 则用 <code>/console</code> 访问，<code>/admin</code> 将失效；保存后需用新地址访问（api / player / favicon.ico 为保留字）</div>
                     </div>
+                    <div class="system-config-item">
+                        <label>
+                            <input type="checkbox" id="sysEnableMigu">
+                            启用咪咕源（核心）
+                        </label>
+                        <div class="system-config-hint">关闭后不抓取咪咕频道 / 体育赛事 / EPG，仅用内置与外部源（适合纯自定义源、空白部署）</div>
+                    </div>
+                    <div class="system-config-item">
+                        <label>
+                            <input type="checkbox" id="sysEnableBuiltInSources">
+                            启用内置单频道源
+                        </label>
+                        <div class="system-config-hint">自带的 纬来体育 / Red Bull / 4K卫视 等；关闭后不加载也不抓取（省启动资源）</div>
+                    </div>
+                    <div class="system-config-item">
+                        <label>
+                            <input type="checkbox" id="sysEnableBuiltInSubscriptions">
+                            启用内置订阅源
+                        </label>
+                        <div class="system-config-hint">自带的 港澳地方频道 / 全球频道；关闭后不加入（已添加的可在"源管理"删除，删后不再复活）</div>
+                    </div>
                     <div class="system-config-item" style="display: none;">
                         <label>节目单更新间隔（小时）</label>
                         <input type="number" id="sysProgramInterval" placeholder="6">
@@ -1801,6 +1822,7 @@
                 </div>
                 <div class="system-config-actions">
                     <button class="btn btn-success" onclick="saveSystemConfig()">💾 保存系统配置</button>
+                    <button class="btn" onclick="applyBlankMode()" title="关闭咪咕 + 内置单频道源 + 内置订阅源，得到空白平台（需点保存生效）">🧹 一键空白</button>
                 </div>
                 <div style="margin-top: 12px; padding: 10px; background: #f0f0f0; border-radius: 4px; font-size: 13px; color: #666; text-align: center;">
                     💡 提示：保存配置后，需点击页面顶部的"重启服务"按钮使新配置生效
@@ -2928,6 +2950,9 @@
             document.getElementById('sysProgramInterval').value = systemConfig.programInfoUpdateInterval || '8';
             document.getElementById('sysEnableHDR').checked = systemConfig.enableHDR !== false;
             document.getElementById('sysEnableH265').checked = systemConfig.enableH265 !== false;
+            document.getElementById('sysEnableMigu').checked = systemConfig.enableMigu !== false;
+            document.getElementById('sysEnableBuiltInSources').checked = systemConfig.enableBuiltInSources !== false;
+            document.getElementById('sysEnableBuiltInSubscriptions').checked = systemConfig.enableBuiltInSubscriptions !== false;
             renderEnvOverrideWarning();
         }
 
@@ -2938,20 +2963,32 @@
             const labels = {
                 userId: '咪咕账号ID', token: '咪咕Token', port: '端口', host: '公网地址',
                 rateType: '画质', pass: '访问密码', enableHDR: 'HDR', enableH265: 'H.265',
-                programInfoUpdateInterval: '更新间隔', refreshToken: 'token刷新', adminPath: '管理页面路径'
+                programInfoUpdateInterval: '更新间隔', refreshToken: 'token刷新', adminPath: '管理页面路径',
+                enableMigu: '启用咪咕源', enableBuiltInSources: '启用内置单频道源', enableBuiltInSubscriptions: '启用内置订阅源'
             };
             const overrides = systemConfig.envOverrides || {};
             const names = Object.keys(overrides).filter(k => overrides[k]).map(k => labels[k] || k);
-            if (names.length === 0) {
+            const parts = [];
+            if (names.length > 0) {
+                parts.push(
+                    '⚠️ 以下配置由 <strong>docker-compose 环境变量</strong> 设置：<strong>' + names.join('、') + '</strong><br>' +
+                    '在此填入新值可临时覆盖，但<strong>清空后保存会回退到环境变量的值</strong>（环境变量为兜底）。' +
+                    '要彻底修改或移除，请改 <code>docker-compose.yml</code> 里对应的 <code>m*</code> 变量后重启容器。'
+                );
+            }
+            if (systemConfig.blankModeEnv) {
+                parts.push(
+                    '🧹 已通过环境变量 <code>mblank</code> 开启<strong>空白模式</strong>：咪咕 / 内置单频道源 / 内置订阅源默认关闭。' +
+                    '可在上方单独勾选并保存以覆盖（保存后以你的勾选为准）。'
+                );
+            }
+            if (parts.length === 0) {
                 box.style.display = 'none';
                 box.innerHTML = '';
                 return;
             }
             box.style.display = 'block';
-            box.innerHTML =
-                '⚠️ 以下配置由 <strong>docker-compose 环境变量</strong> 设置：<strong>' + names.join('、') + '</strong><br>' +
-                '在此填入新值可临时覆盖，但<strong>清空后保存会回退到环境变量的值</strong>（环境变量为兜底）。' +
-                '要彻底修改或移除，请改 <code>docker-compose.yml</code> 里对应的 <code>m*</code> 变量后重启容器。';
+            box.innerHTML = parts.join('<hr style="border:none;border-top:1px solid #ffd591;margin:8px 0">');
         }
 
         // 初始化咪咕账号获取Bookmarklet
@@ -3049,6 +3086,14 @@ if(success){
         }
 
         // 保存系统配置
+        // 一键空白：关闭三项内容开关（仅前端勾选，需点"保存系统配置"才生效）
+        function applyBlankMode() {
+            document.getElementById('sysEnableMigu').checked = false;
+            document.getElementById('sysEnableBuiltInSources').checked = false;
+            document.getElementById('sysEnableBuiltInSubscriptions').checked = false;
+            showStatus('已勾选为空白模式（关闭咪咕 + 内置源 + 内置订阅），点击"💾 保存系统配置"生效', 'info');
+        }
+
         async function saveSystemConfig() {
             try {
                 const port = parseInt(document.getElementById('sysPort').value) || 1905;
@@ -3070,7 +3115,10 @@ if(success){
                     adminPath: adminPathInput,
                     programInfoUpdateInterval: document.getElementById('sysProgramInterval').value || '8',
                     enableHDR: document.getElementById('sysEnableHDR').checked,
-                    enableH265: document.getElementById('sysEnableH265').checked
+                    enableH265: document.getElementById('sysEnableH265').checked,
+                    enableMigu: document.getElementById('sysEnableMigu').checked,
+                    enableBuiltInSources: document.getElementById('sysEnableBuiltInSources').checked,
+                    enableBuiltInSubscriptions: document.getElementById('sysEnableBuiltInSubscriptions').checked
                 };
 
                 const response = await fetch(API_PREFIX + '/api/system-config', {

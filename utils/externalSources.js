@@ -1,6 +1,7 @@
 import { readFileSync, existsSync } from "node:fs"
 import { writeJsonFileSync } from "./fileUtil.js"
 import { dataPath } from "./paths.js"
+import { enableBuiltInSubscriptions } from "../config.js"
 import { printBlue, printGreen, printGrey, printRed, printYellow } from "./colorOut.js"
 import { extractM3u8FromWeb, validateM3u8 } from "./webSourceExtractor.js"
 import fetch from 'node-fetch'
@@ -283,16 +284,37 @@ function cloneBuiltInSubscription(entry) {
   return JSON.parse(JSON.stringify(entry))
 }
 
-function ensureBuiltInSubscriptions(sources) {
-  if (!Array.isArray(sources)) return false
+// 内置订阅源 URL 集合与判断：禁用内置订阅时，抓取层(updateAllSources/updateSubscriptionSource)
+// 与服务层(getValidChannels)都据此跳过，避免无谓联网下载，并保证输出一致。
+const BUILT_IN_SUBSCRIPTION_URLS = new Set(BUILT_IN_SUBSCRIPTIONS.map(b => b.subscriptionUrl))
+function isBuiltInSubscriptionSource(source) {
+  return !!(source && source.subscriptionUrl && BUILT_IN_SUBSCRIPTION_URLS.has(source.subscriptionUrl))
+}
+
+// 播种内置订阅源（港澳/全球）。
+// 关键改动：从「缺了就加回来」改为「只播种从未播种过的 URL」，用 config.seededBuiltInUrls 记录已播种集合。
+// 这样用户删除内置订阅后不会在重启时复活（修复 issue：默认源删不掉）。
+// enableBuiltInSubscriptions=false 时不再播种。
+function ensureBuiltInSubscriptions(config) {
+  if (!config || !Array.isArray(config.sources)) return false
   let mutated = false
+  // 首次升级迁移：把「当前已存在的内置订阅 URL」视为已播种，避免老用户之后删除被重新加回。
+  if (!Array.isArray(config.seededBuiltInUrls)) {
+    config.seededBuiltInUrls = BUILT_IN_SUBSCRIPTIONS
+      .map(b => b.subscriptionUrl)
+      .filter(url => config.sources.some(s => s && s.subscriptionUrl === url))
+    mutated = true
+  }
+  if (!enableBuiltInSubscriptions) return mutated  // 关闭：不再播种
   for (const builtIn of BUILT_IN_SUBSCRIPTIONS) {
-    const exists = sources.some(s => s && s.subscriptionUrl === builtIn.subscriptionUrl)
-    if (!exists) {
-      sources.push(cloneBuiltInSubscription(builtIn))
-      mutated = true
+    const url = builtIn.subscriptionUrl
+    if (config.seededBuiltInUrls.includes(url)) continue  // 已播种（含被用户删除过）→ 不再加
+    if (!config.sources.some(s => s && s.subscriptionUrl === url)) {
+      config.sources.push(cloneBuiltInSubscription(builtIn))
       printBlue(`补齐内置订阅源: ${builtIn.name}`)
     }
+    config.seededBuiltInUrls.push(url)
+    mutated = true
   }
   return mutated
 }
@@ -311,11 +333,14 @@ class ExternalSourceManager {
    */
   loadSources() {
     if (!existsSync(EXTERNAL_SOURCES_PATH)) {
+      const seedSubs = enableBuiltInSubscriptions
       const defaultConfig = {
         enabled: true,
         includeInPlaylists: true,
         updateOnStartup: true,
-        sources: BUILT_IN_SUBSCRIPTIONS.map(cloneBuiltInSubscription),
+        sources: seedSubs ? BUILT_IN_SUBSCRIPTIONS.map(cloneBuiltInSubscription) : [],
+        // 记录已播种的内置订阅 URL（开启时为全部；关闭时为空，之后开启会按需补齐一次）
+        seededBuiltInUrls: seedSubs ? BUILT_IN_SUBSCRIPTIONS.map(b => b.subscriptionUrl) : [],
         updateInterval: 60,
         lastGlobalUpdate: null
       }
@@ -329,7 +354,6 @@ class ExternalSourceManager {
       const parsed = JSON.parse(content)
       if (Array.isArray(parsed)) {
         const sources = parsed.map(s => ({ ...s, updateOnStartup: s.updateOnStartup !== false }))
-        const mutated = ensureBuiltInSubscriptions(sources)
         const config = {
           enabled: true,
           includeInPlaylists: true,
@@ -338,6 +362,7 @@ class ExternalSourceManager {
           updateInterval: 60,
           lastGlobalUpdate: null
         }
+        const mutated = ensureBuiltInSubscriptions(config)
         if (mutated) this.saveSources(config)
         return config
       }
@@ -356,8 +381,8 @@ class ExternalSourceManager {
           ...s,
           updateOnStartup: s.updateOnStartup !== false
         }))
-        // 补齐缺失的内置订阅源
-        const mutated = ensureBuiltInSubscriptions(parsed.sources)
+        // 播种内置订阅源（只播种从未播种过的；尊重用户删除）
+        const mutated = ensureBuiltInSubscriptions(parsed)
         if (mutated) this.saveSources(parsed)
         return parsed
       }
@@ -495,6 +520,10 @@ class ExternalSourceManager {
     if (!source.subscriptionUrl) {
       return { success: false, message: '未填写订阅地址' }
     }
+    // 内置订阅源已禁用：不抓取（兜底覆盖 60s 重试 / 手动导入等所有调用方）
+    if (!enableBuiltInSubscriptions && isBuiltInSubscriptionSource(source)) {
+      return { success: true, skipped: true, message: '内置订阅源已禁用，跳过抓取' }
+    }
 
     try {
       printBlue(`更新订阅源: ${source.name} (${source.subscriptionUrl})`)
@@ -579,7 +608,13 @@ class ExternalSourceManager {
         skipped++
         continue
       }
-      
+
+      // 内置订阅源已禁用：跳过抓取（避免无谓联网下载，与服务层一致）
+      if (!enableBuiltInSubscriptions && isBuiltInSubscriptionSource(source)) {
+        skipped++
+        continue
+      }
+
       // 启动模式：只更新设置了updateOnStartup的源
       if (startupMode && source.updateOnStartup === false) {
         skipped++
@@ -635,13 +670,15 @@ class ExternalSourceManager {
     if (!this.sources.enabled) {
       return []
     }
-    
+
     const channels = []
     const groupMap = new Map()
-    
+
     this.sources.sources.forEach(source => {
       if (!source.enabled) return
-      
+      // 内置订阅源已禁用：跳过输出（数据仍保留在 external-sources.json，开启后即恢复，可逆）
+      if (!enableBuiltInSubscriptions && isBuiltInSubscriptionSource(source)) return
+
       // 订阅模式：展开 parsedChannels
       if (source.mode === 'subscription' && Array.isArray(source.parsedChannels)) {
         source.parsedChannels.forEach(ch => {
@@ -731,4 +768,4 @@ class ExternalSourceManager {
 const externalSourceManager = new ExternalSourceManager()
 
 export default externalSourceManager
-export { ExternalSourceManager, fetchAndParseM3u, parsePlaylistContent, GITHUB_RAW_MIRRORS, BUILT_IN_SUBSCRIPTIONS }
+export { ExternalSourceManager, fetchAndParseM3u, parsePlaylistContent, isBuiltInSubscriptionSource, GITHUB_RAW_MIRRORS, BUILT_IN_SUBSCRIPTIONS }

@@ -1,6 +1,7 @@
 import { readFileSync, existsSync } from "node:fs"
 import { writeJsonFileSync } from "./fileUtil.js"
 import { dataPath } from "./paths.js"
+import { enableBuiltInSources } from "../config.js"
 import { printBlue, printGreen, printYellow, printRed } from "./colorOut.js"
 import { extractM3u8FromWeb } from "./webSourceExtractor.js"
 
@@ -128,8 +129,8 @@ class BuiltInSourceManager {
    */
   async updateFetchSources(options = {}) {
     const { startupMode = false, autoOnly = false, forceAll = false } = options
-    
-    if (!this.sources.enabled) {
+
+    if (!this.sources.enabled || !enableBuiltInSources) {
       return { success: true, message: "内置源已禁用" }
     }
 
@@ -237,7 +238,7 @@ class BuiltInSourceManager {
    * 获取所有有效的内置源频道（按分组）
    */
   getValidChannels() {
-    if (!this.sources.enabled) {
+    if (!this.sources.enabled || !enableBuiltInSources) {
       return []
     }
 

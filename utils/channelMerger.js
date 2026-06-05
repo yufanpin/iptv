@@ -1,6 +1,7 @@
 import { dataList as getMiguChannels } from "./fetchList.js"
 import externalSourceManager from "./externalSources.js"
 import builtInSourceManager from "./builtInSources.js"
+import { enableMigu } from "../config.js"
 import { printBlue, printGreen, printYellow, printRed } from "./colorOut.js"
 
 // 缓存最近一次获取的咪咕频道数据
@@ -17,7 +18,9 @@ async function getAllChannels(options = {}) {
   try {
     // 获取咪咕频道
     let miguChannels = []
-    if (skipMigu) {
+    if (!enableMigu) {
+      printYellow("咪咕已禁用（enableMigu=false），仅使用内置/外部源")
+    } else if (skipMigu) {
       printYellow("跳过咪咕频道获取（启动时更新已关闭）")
     } else if (useCachedMigu && cachedMiguChannels.length > 0) {
       // 使用缓存数据（快速模式）
