@@ -2,6 +2,7 @@
 
 [![GitHub](https://img.shields.io/badge/GitHub-akiralereal/iptv-181717?logo=github&logoColor=white&style=for-the-badge&logoSize=auto)](https://github.com/akiralereal/iptv)
 [![Docker Hub](https://img.shields.io/badge/Docker%20Hub-akiralereal/iptv-2496ED?logo=docker&logoColor=white&style=for-the-badge&logoSize=auto)](https://hub.docker.com/r/akiralereal/iptv)
+[![GitHub Sponsors](https://img.shields.io/badge/Sponsor-%E2%9D%A4-EA4AAA?logo=githubsponsors&logoColor=white&style=for-the-badge)](https://github.com/sponsors/akiralereal)
 
 ### ☕ 打赏支持 / Buy Me a Coffee
 
@@ -9,10 +10,14 @@
 
 <table>
   <tr>
+    <td align="center"><b>❤️ GitHub Sponsors</b></td>
     <td align="center"><b>☕ Ko-fi</b></td>
     <td align="center"><b>💰 USDT (TRC20)</b></td>
   </tr>
   <tr>
+    <td align="center">
+      <a href="https://github.com/sponsors/akiralereal" target="_blank"><img src="https://img.shields.io/badge/Sponsor-%E2%9D%A4-EA4AAA?logo=githubsponsors&logoColor=white&style=for-the-badge" alt="GitHub Sponsors"/></a>
+    </td>
     <td align="center">
       <a href="https://ko-fi.com/akirale" target="_blank"><img src="https://ko-fi.com/img/githubbutton_sm.svg" alt="Ko-fi"/></a>
     </td>
