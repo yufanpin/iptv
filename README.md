@@ -699,6 +699,7 @@ cd iPTV
 ```shell
 node app.js
 #lsof -ti:1905 | xargs kill -9 && node app.js
+#node scripts/probe-m3u.mjs
 ```
 
 若需要修改配置，可以使用以下命令
