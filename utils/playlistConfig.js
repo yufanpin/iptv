@@ -444,6 +444,10 @@ export function createProfile({ id, name, fromProfile } = {}) {
   if (id === 'default') {
     return { success: false, message: 'default 为系统保留档名' }
   }
+  const displayName = (typeof name === 'string' && name.trim()) ? name.trim() : id
+  if (displayName.length > 20) {
+    return { success: false, message: '档名不能超过 20 个字符' }
+  }
   const existing = readProfilesRegistry()
   if (existing.some(p => p.id === id)) {
     return { success: false, message: `配置档 "${id}" 已存在` }
@@ -453,7 +457,6 @@ export function createProfile({ id, name, fromProfile } = {}) {
     : { ...DEFAULT_CONFIG }
   const saveRes = saveConfig(id, baseConfig)
   if (!saveRes.success) return saveRes
-  const displayName = (typeof name === 'string' && name.trim()) ? name.trim() : id
   writeProfilesRegistry([...existing, { id, name: displayName }])
   return { success: true, profile: { id, name: displayName } }
 }
@@ -465,6 +468,7 @@ export function renameProfile({ id, name } = {}) {
   const idx = existing.findIndex(p => p.id === id)
   if (idx === -1) return { success: false, message: `配置档 "${id}" 不存在` }
   const displayName = (typeof name === 'string' && name.trim()) ? name.trim() : id
+  if (displayName.length > 20) return { success: false, message: '档名不能超过 20 个字符' }
   existing[idx] = { id, name: displayName }
   writeProfilesRegistry(existing)
   return { success: true, profile: { id, name: displayName } }

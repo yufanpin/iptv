@@ -374,6 +374,44 @@
             justify-content: flex-end;
         }
 
+        /* 配置档管理弹窗的档列表 */
+        .profile-row {
+            display: flex;
+            align-items: flex-start;
+            gap: 12px;
+            padding: 12px 14px;
+            border: 1px solid #eee;
+            border-radius: 8px;
+            margin-bottom: 10px;
+        }
+        .profile-row.active {
+            border-color: #1890ff;
+            background: #f0f7ff;
+        }
+        .profile-row-actions {
+            display: flex;
+            flex-direction: column;
+            gap: 6px;
+            flex-shrink: 0;
+            align-items: stretch;
+            min-width: 64px;
+        }
+        .profile-url {
+            margin-top: 4px;
+            font-size: 12px;
+            color: #888;
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            flex-wrap: wrap;
+        }
+        .profile-url code {
+            background: #f0f0f0;
+            padding: 2px 6px;
+            border-radius: 3px;
+            word-break: break-all;
+        }
+
         .status {
             position: fixed;
             top: 50%;
@@ -1594,8 +1632,8 @@
     <!-- 重置选项弹窗 -->
     <div class="modal" id="resetModal">
         <div class="modal-content" style="width: 420px; max-width: 90%;">
-            <h3>🔄 重置配置</h3>
-            <p style="color: #666; font-size: 13px; margin-bottom: 16px;">选择要重置的配置项，未选中的配置将保留不变。</p>
+            <h3 id="resetModalTitle">🔄 重置配置</h3>
+            <p style="color: #666; font-size: 13px; margin-bottom: 16px;" id="resetModalHint">选择要重置的配置项，未选中的配置将保留不变。</p>
             <div class="reset-options">
                 <label class="reset-option">
                     <input type="checkbox" id="resetRename" checked>
@@ -1626,13 +1664,31 @@
         </div>
     </div>
 
+    <!-- 多套配置档管理弹窗 -->
+    <div class="modal" id="profileModal">
+        <div class="modal-content" style="width: 580px; max-width: 92%;">
+            <h3>📺 多套配置档（大分组）</h3>
+            <p style="color: #666; font-size: 13px; line-height: 1.7; margin-bottom: 16px;">
+                给家里不同电视各维护<strong>一套独立的频道编排</strong>——大厅给老人、卧室给年轻人、茶室……
+                每套档单独保存隐藏 / 分组 / 排序 / 重命名，<strong>用各自的地址访问、互不影响</strong>。
+                底层频道与节目单（EPG）多档共享，新增一台电视不增加任何抓取成本。
+                <br>用法：在这里「切换」到某一档后，下方「我的频道」编辑的就是该档；把每档的地址分别填到对应电视即可。
+            </p>
+            <div id="profileListBox" style="max-height: 50vh; overflow-y: auto; margin-bottom: 16px;"></div>
+            <div class="modal-actions" style="justify-content: space-between;">
+                <button class="btn btn-primary" onclick="closeProfileModal(); createProfilePrompt();" title="复制当前档为新的一档">➕ 新建配置档</button>
+                <button class="btn btn-success" onclick="closeProfileModal()">关闭</button>
+            </div>
+        </div>
+    </div>
+
     <!-- 新建配置档弹窗 -->
     <div class="modal" id="createProfileModal">
         <div class="modal-content" style="width: 440px; max-width: 90%;">
             <h3>➕ 新建配置档</h3>
             <p style="color: #666; font-size: 13px; margin-bottom: 16px;" id="createProfileHint">将复制当前档的设置，作为新的一档。</p>
             <label style="display:block; font-size:13px; color:#333; margin-bottom:6px;">显示名称（如：卧室、茶室）</label>
-            <input type="text" id="newProfileName" placeholder="卧室" autocomplete="off"
+            <input type="text" id="newProfileName" placeholder="卧室" autocomplete="off" maxlength="20"
                    onkeydown="if(event.key==='Enter'){document.getElementById('newProfileId').focus();}">
             <label style="display:block; font-size:13px; color:#333; margin-bottom:6px;">访问地址短名（选填，英文/数字）</label>
             <input type="text" id="newProfileId" placeholder="woshi　→　/m3u?profile=woshi" autocomplete="off"
@@ -1740,15 +1796,10 @@
                     <div class="my-playlist-info">
                         <h3>📺 我的频道 <span id="myChannelTotal" style="font-size: 14px; font-weight: normal; color: #1890ff;"></span></h3>
                         <p class="my-playlist-hint">💡 点击频道名称可查看详情，并一键用 VLC / IINA / PotPlayer 打开播放</p>
-                        <p class="my-playlist-hint" id="profileAccessHint" style="margin-top: 4px;"></p>
                     </div>
                     <div class="my-playlist-actions" style="flex-wrap: wrap; align-items: center;">
-                        <span style="font-size: 13px; color: #666;">配置档：</span>
-                        <select id="profileSelect" onchange="switchProfile(this.value)" title="不同电视各用一套：切换后下方编辑的就是该档" style="padding: 6px 10px; border: 1px solid #d9d9d9; border-radius: 6px; font-size: 14px; max-width: 180px;"></select>
-                        <button class="btn" onclick="createProfilePrompt()" title="复制当前配置档为新的一档（给另一台电视用）">➕ 新建</button>
-                        <button class="btn" onclick="renameProfilePrompt()" title="重命名当前配置档">✏️ 改名</button>
-                        <button class="btn" onclick="deleteProfilePrompt()" title="删除当前配置档">🗑️ 删除</button>
-                        <button class="btn btn-warning" onclick="resetMyPlaylist()">🔄 重置</button>
+                        <span style="font-size: 14px; color: #333;">当前档：<strong id="currentProfileLabel">默认</strong></span>
+                        <button class="btn btn-primary" onclick="openProfileModal()" title="管理多套配置档：切换 / 新建 / 改名 / 删除 / 重置">✏️ 编辑</button>
                     </div>
                 </div>
                 <div class="my-playlist-container">
@@ -3359,40 +3410,76 @@ if(success){
                 const result = await res.json();
                 if (result.success && Array.isArray(result.data) && result.data.length) {
                     profileList = result.data;
-                    if (!profileList.some(p => p.id === activeProfile)) activeProfile = 'default';
-                    renderProfileSelect();
+                    // 恢复上次选择的档（记在本浏览器），刷新后不再跳回默认；不存在则回默认
+                    let saved = null;
+                    try { saved = localStorage.getItem('iptv_active_profile'); } catch (e) {}
+                    if (saved && profileList.some(p => p.id === saved)) {
+                        activeProfile = saved;
+                    } else if (!profileList.some(p => p.id === activeProfile)) {
+                        activeProfile = 'default';
+                    }
+                    renderProfileUI();
                 }
             } catch (error) {
                 console.error('加载配置档列表失败:', error);
             }
         }
 
-        function renderProfileSelect() {
-            const sel = document.getElementById('profileSelect');
-            if (!sel) return;
-            sel.innerHTML = profileList.map(p =>
-                `<option value="${escapeHtml(p.id)}" ${p.id === activeProfile ? 'selected' : ''}>${escapeHtml(p.name)}${p.id === 'default' ? '' : ' (' + escapeHtml(p.id) + ')'}</option>`
-            ).join('');
-            updateProfileAccessHint();
+        // 顶部主按钮显示当前档名；弹窗打开时同步刷新档列表
+        function renderProfileUI() {
+            const label = document.getElementById('currentProfileLabel');
+            if (label) label.textContent = currentProfileName();
+            const modal = document.getElementById('profileModal');
+            if (modal && modal.style.display === 'block') renderProfileList();
         }
 
-        function updateProfileAccessHint() {
-            const el = document.getElementById('profileAccessHint');
-            if (!el) return;
+        function openProfileModal() {
+            renderProfileList();
+            document.getElementById('profileModal').style.display = 'block';
+        }
+        function closeProfileModal() {
+            document.getElementById('profileModal').style.display = 'none';
+        }
+
+        // 渲染弹窗里的档列表：每档 名称 + 访问地址(可复制) + 切换/改名/删除
+        function renderProfileList() {
+            const box = document.getElementById('profileListBox');
+            if (!box) return;
             const base = window.location.origin + API_PREFIX;
-            const q = (activeProfile && activeProfile !== 'default') ? ('?profile=' + activeProfile) : '';
-            el.innerHTML = `🔗 本档地址 — M3U：<code>${base}/m3u${q}</code>　TXT：<code>${base}/txt${q}</code>`;
+            box.innerHTML = profileList.map(p => {
+                const isActive = p.id === activeProfile;
+                const isDefault = p.id === 'default';
+                const url = base + '/m3u' + (isDefault ? '' : '?profile=' + p.id);
+                const slugHtml = isDefault ? '' : ` <span style="color:#999;font-weight:normal;font-size:12px;">(${escapeHtml(p.id)})</span>`;
+                // 改名按钮紧跟档名右侧（默认档不可改名）
+                const renameBtn = isDefault ? '' :
+                    ` <button class="btn btn-sm" onclick="renameProfilePrompt('${p.id}')" title="重命名该档" style="padding:2px 8px; font-size:12px;">改名</button>`;
+                // 右侧竖排：当前档=重置，其它档=切换；非默认档另有删除
+                const left = isActive
+                    ? '<button class="btn btn-sm btn-warning" onclick="closeProfileModal(); resetMyPlaylist();" title="重置本档：重命名 / 隐藏 / 排序">🔄 重置</button>'
+                    : `<button class="btn btn-sm btn-primary" onclick="switchProfile('${p.id}')">切换</button>`;
+                const del = isDefault ? '' :
+                    `<button class="btn btn-sm btn-danger" onclick="deleteProfilePrompt('${p.id}')">删除</button>`;
+                return `<div class="profile-row${isActive ? ' active' : ''}">
+                    <div style="flex:1; min-width:0;">
+                        <div style="font-weight:600; display:flex; align-items:center; flex-wrap:wrap; gap:6px;">${escapeHtml(p.name)}${slugHtml}${renameBtn}</div>
+                        <div class="profile-url"><code>${escapeHtml(url)}</code><button class="btn btn-sm" onclick="copyToClipboard('${url}', '播放地址')">复制</button></div>
+                    </div>
+                    <div class="profile-row-actions">${left}${del}</div>
+                </div>`;
+            }).join('');
         }
 
         // 切换配置档：复用现有三栏编辑器，只重载该档的配置与频道
         async function switchProfile(id) {
             activeProfile = id || 'default';
+            try { localStorage.setItem('iptv_active_profile', activeProfile); } catch (e) {}
             selectedGroupIndex = 0;
             isViewingDeleted = false;
             await loadMyPlaylistConfig();
             await loadMyPlaylist();
-            // 同步下拉选中项 + 顶部地址（renderProfileSelect 内部会调 updateProfileAccessHint）
-            renderProfileSelect();
+            // 同步顶部主按钮档名 + 弹窗列表高亮（弹窗若开着）
+            renderProfileUI();
         }
 
         // 新建档 = 复制当前档（用户选定的语义）。打开两输入框弹窗：显示名 + 选填地址短名。
@@ -3412,6 +3499,7 @@ if(success){
         async function confirmCreateProfile() {
             const displayName = document.getElementById('newProfileName').value.trim();
             if (!displayName) { showStatus('请填写显示名称', 'error'); return; }
+            if (displayName.length > 20) { showStatus('档名请控制在 20 个字符以内', 'error'); return; }
             let id = document.getElementById('newProfileId').value.trim().toLowerCase();
             if (id && !/^[a-z0-9_-]{1,64}$/.test(id)) { showStatus('地址短名只能用字母、数字、_ 或 -', 'error'); return; }
             // 留空：自动生成短名（中文无法转拼音，用时间戳兜底）
@@ -3437,17 +3525,20 @@ if(success){
             }
         }
 
-        async function renameProfilePrompt() {
-            if (activeProfile === 'default') { showStatus('默认档不可改名', 'error'); return; }
-            const name = prompt('重命名当前配置档显示名：', currentProfileName());
+        async function renameProfilePrompt(id) {
+            id = id || activeProfile;
+            if (id === 'default') { showStatus('默认档不可改名', 'error'); return; }
+            const cur = (profileList.find(p => p.id === id) || {}).name || id;
+            const name = prompt('重命名配置档显示名：', cur);
             if (name === null) return;
             const displayName = name.trim();
             if (!displayName) { showStatus('档名不能为空', 'error'); return; }
+            if (displayName.length > 20) { showStatus('档名请控制在 20 个字符以内', 'error'); return; }
             try {
                 const res = await fetch(API_PREFIX + '/api/' + 'my-playlist-profiles', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ action: 'rename', id: activeProfile, name: displayName })
+                    body: JSON.stringify({ action: 'rename', id, name: displayName })
                 });
                 const result = await res.json();
                 if (result.success) { showStatus('已重命名', 'success'); await loadProfiles(); }
@@ -3457,20 +3548,27 @@ if(success){
             }
         }
 
-        async function deleteProfilePrompt() {
-            if (activeProfile === 'default') { showStatus('默认档不可删除', 'error'); return; }
-            if (!confirm(`确定删除配置档「${currentProfileName()}」？\n该档的隐藏/分组/排序设置会一并删除（不影响其它档和底层频道）。`)) return;
+        async function deleteProfilePrompt(id) {
+            id = id || activeProfile;
+            if (id === 'default') { showStatus('默认档不可删除', 'error'); return; }
+            const nm = (profileList.find(p => p.id === id) || {}).name || id;
+            if (!confirm(`确定删除配置档「${nm}」？\n该档的隐藏/分组/排序设置会一并删除（不影响其它档和底层频道）。`)) return;
             try {
                 const res = await fetch(API_PREFIX + '/api/' + 'my-playlist-profiles', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ action: 'delete', id: activeProfile })
+                    body: JSON.stringify({ action: 'delete', id })
                 });
                 const result = await res.json();
                 if (result.success) {
                     showStatus('已删除配置档', 'success');
-                    await loadProfiles();
-                    await switchProfile('default');
+                    // 删的是当前档 → 切回默认；删的是其它档 → 只刷新列表，当前编辑不变
+                    if (id === activeProfile) {
+                        await loadProfiles();
+                        await switchProfile('default');
+                    } else {
+                        await loadProfiles();
+                    }
                 } else showStatus(result.message || '删除失败', 'error');
             } catch (error) {
                 showStatus('删除失败: ' + error.message, 'error');
@@ -4351,7 +4449,7 @@ if(success){
                 if (result.success) {
                     // 重新加载数据但保持当前视图
                     await loadMyPlaylist(false);
-                    showStatus(`已恢复 ${channelIds.length} 个频道`, 'success');
+                    showStatus(`已恢复 ${hiddenKeys.length} 个频道`, 'success');
                 } else {
                     showStatus('恢复失败', 'error');
                 }
@@ -4388,6 +4486,11 @@ if(success){
         }
 
         function resetMyPlaylist() {
+            // 标题/说明带上当前档名，明确「只重置当前档」
+            const t = document.getElementById('resetModalTitle');
+            if (t) t.textContent = `🔄 重置「${currentProfileName()}」配置`;
+            const h = document.getElementById('resetModalHint');
+            if (h) h.textContent = '选择要重置的配置项，未选中的保留不变。仅重置当前档，其它档不受影响。';
             document.getElementById('resetRename').checked = true;
             document.getElementById('resetHidden').checked = true;
             document.getElementById('resetOrder').checked = true;
