@@ -3373,7 +3373,8 @@ if(success){
             customGroups: [],
             groupOrder: [],
             deletedGroups: [],
-            groupRenameMap: {}
+            groupRenameMap: {},
+            groupSortMode: {}
         };
         // 多套 m3u 配置档：当前编辑/查看的档 + 档列表（default 恒在首位）
         let activeProfile = 'default';
@@ -3839,7 +3840,8 @@ if(success){
                 title.textContent = `${group.name} (${group.channels.length}个频道)`;
                 const isUngrouped = group.name === '未分组';
                 const isCustomGroup = isCustomGroupName(group.name);
-                
+                const isNameSorted = !!(myPlaylistConfig.groupSortMode && myPlaylistConfig.groupSortMode[group.name] === 'name');
+
                 // 根据批量模式显示不同的操作按钮
                 if (isBatchMode) {
                     const selectedCount = selectedChannels.size;
@@ -3863,6 +3865,7 @@ if(success){
                         <button class="btn btn-sm" onclick="renameGroup(${groupIndex})" ${isUngrouped ? 'disabled' : ''}>重命名</button>
                         <button class="btn btn-sm" onclick="moveGroupUp(${groupIndex})" ${isUngrouped || groupIndex === 0 ? 'disabled' : ''}>↑ 上移</button>
                         <button class="btn btn-sm" onclick="moveGroupDown(${groupIndex})" ${isUngrouped || groupIndex === myPlaylistData.length - 1 ? 'disabled' : ''}>↓ 下移</button>
+                        <button class="btn btn-sm" onclick="toggleGroupSort()" title="${isNameSorted ? '改回手动拖拽排序' : '组内频道按名称自动排序（含新增频道）'}">${isNameSorted ? '↕️ 改手动排序' : '🔤 按名称排序'}</button>
                         <button class="btn btn-danger btn-sm" onclick="deleteGroup(${groupIndex})" ${isUngrouped || isCustomGroup ? 'disabled' : ''}>隐藏分组</button>
                         <button class="btn btn-primary btn-sm" onclick="toggleBatchMode()">批量管理</button>
                     `;
@@ -3875,12 +3878,12 @@ if(success){
                         <div class="my-playlist-channels">
                             ${group.channels.map(channel => `
                                 <div class="my-playlist-channel ${isBatchMode ? 'batch-mode' : ''}" data-channel-id="${channel.id}"
-                                     ${!isBatchMode ? `draggable="true" ondragstart="onChannelDragStart(event, '${channel.id}')" ondragend="onChannelDragEnd(event)" ondragover="onChannelDragOver(event)" ondrop="onChannelDrop(event, '${channel.id}')"` : ''}>
+                                     ${!isBatchMode && !isNameSorted ? `draggable="true" ondragstart="onChannelDragStart(event, '${channel.id}')" ondragend="onChannelDragEnd(event)" ondragover="onChannelDragOver(event)" ondrop="onChannelDrop(event, '${channel.id}')"` : ''}>
                                     ${isBatchMode ? `
                                         <input type="checkbox" class="my-playlist-channel-checkbox"
                                                onchange="toggleChannelSelection('${channel.id}')"
                                                ${selectedChannels.has(channel.id) ? 'checked' : ''}>
-                                    ` : `<span class="channel-drag-handle" aria-hidden="true" title="拖拽排序">⠿</span>`}
+                                    ` : (isNameSorted ? `<span class="channel-drag-handle" aria-hidden="true" title="按名称自动排序中">🔤</span>` : `<span class="channel-drag-handle" aria-hidden="true" title="拖拽排序">⠿</span>`)}
                                     <div class="my-playlist-channel-name" title="点击查看详情：${channel.name}" onclick="showChannelDetail('${channel.id}', false)" style="cursor: pointer;">
                                         <span class="channel-detail-hint" aria-hidden="true">ⓘ</span>${channel.name}
                                     </div>
@@ -4484,6 +4487,22 @@ if(success){
                     message: error.message
                 };
             }
+        }
+
+        // 切换当前分组的「组内排序方式」：按名称自动 ↔ 手动拖拽
+        async function toggleGroupSort() {
+            if (isViewingDeleted || myPlaylistData.length === 0 || selectedGroupIndex >= myPlaylistData.length) return;
+            const group = myPlaylistData[selectedGroupIndex];
+            if (!myPlaylistConfig.groupSortMode) myPlaylistConfig.groupSortMode = {};
+            if (myPlaylistConfig.groupSortMode[group.name] === 'name') {
+                delete myPlaylistConfig.groupSortMode[group.name];   // 改回手动
+            } else {
+                myPlaylistConfig.groupSortMode[group.name] = 'name'; // 按名称自动排序
+                // 切到自动排序时清掉该组残留的手动顺序，避免歧义
+                if (myPlaylistConfig.channelOrder) delete myPlaylistConfig.channelOrder[group.name];
+            }
+            await saveMyPlaylist();
+            await loadMyPlaylist(false);
         }
 
         function resetMyPlaylist() {

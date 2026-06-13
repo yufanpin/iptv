@@ -35,7 +35,8 @@ const DEFAULT_CONFIG = {
   customGroups: [],         // 自定义分组 [{name, order}]
   groupOrder: [],           // 分组显示顺序
   deletedGroups: [],        // 删除的分组名列表
-  groupRenameMap: {}        // 分组重命名映射 { 原始名: 新名 }
+  groupRenameMap: {},       // 分组重命名映射 { 原始名: 新名 }
+  groupSortMode: {}         // 组内排序模式 { 显示分组名: 'name' }；'name'=按名称自动排序，缺省=手动(channelOrder)
 }
 
 function buildChannelId({ groupName, channelName, tvgName, url }) {
@@ -348,9 +349,15 @@ export function applyConfig(groups, config) {
       })
     }
 
-    // 6. 应用组内频道排序（拖拽排序）：按 显示分组名 → ["原始分组::频道ID"] 排序
+    // 6. 应用组内频道排序：groupSortMode='name' 的组按名称自动排序（中文按拼音、含数字按数值，
+    //    依赖 Node full-ICU），否则按手动拖拽顺序 channelOrder（显示分组名 → ["原始分组::频道ID"]）。
     const channelOrder = config.channelOrder || {}
+    const groupSortMode = config.groupSortMode || {}
     result.forEach(group => {
+      if (groupSortMode[group.name] === 'name') {
+        group.channels.sort((a, b) => (a.name || '').localeCompare(b.name || '', 'zh', { numeric: true }))
+        return
+      }
       const order = channelOrder[group.name]
       if (Array.isArray(order) && order.length > 0) {
         group.channels.sort((a, b) => {
