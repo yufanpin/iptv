@@ -829,10 +829,29 @@ git push && git push --tags
 - **更新日志面向用户写**：写「改了什么、对用户有什么影响」，而非内部实现；沿用现有 emoji 前缀（🆕 新功能 / 🛠️ 改进 / 🐛 修复 / 🔧 配置 / 🔒 安全 / ⚡ 性能 / 🗑️ 移除），标题加粗。
 - **核对日期**：脚本用运行时系统日期生成 `### vX.Y.Z (YYYY-MM-DD)` 标题，跨天发布或时区异常时手动改正。
 - **Docker 三个标签**：每版镜像会打 `:X.Y.Z`（精确）、`:X.Y`（次版本滚动）、`:X`（主版本滚动）。主版本标签曾长期漏更新、错打成 `:1`，已在 v2.2.0 修复——升 major 后务必确认 `:X` 已正确更新。
-- **镜像构建是手动的**：`push_docker` 工作流为 `workflow_dispatch`，推代码 / tag 都**不会**自动触发；需到 GitHub Actions 页面手动 Run workflow（默认从 `main` 构建，镜像标签写死在 yaml 里、已随 `bump-version.js` 更新）。`git tag` 仅作发布标记。
+- **镜像构建是手动的**：`push_docker` 工作流为 `workflow_dispatch`，推代码 / tag 都**不会**自动触发；需到 GitHub Actions 页面手动 Run workflow（默认从 `main` 构建，镜像标签写死在 yaml 里、已随 `bump-version.js` 更新）。`git tag` 仅作发布标记。也可以不进网页、用命令行一键触发，见本节末尾「命令行触发镜像构建」。
 - **重启生效项**：监听端口、节目单更新间隔等改动需用户重启容器后才生效；本次若涉及，请在更新日志里提醒用户。
 - **随仓库分发的文件要先 push**：若发版包含被「自家 raw GitHub 链接」引用的随仓库文件（如内置源 `IPTV.m3u`），必须先 `git push` 到 `main`，否则链接 404、源拉不到内容；本地自测同理（未 push 时该源显示 0 频道）。
 - **移除内置源 / 改数据结构要带迁移**：删除或更换内置源、变更 `external-sources.json` 等用户数据结构时，加一段一次性迁移清理老用户残留（如 v3.0.0 用 `retiredBuiltInsV1` 清掉退役订阅），否则老用户会留下「连开关都关不掉的僵尸源」。建议用临时 `mdataDir` 指向一份含老数据的配置，跑一遍 `node app.js` 验证迁移「清旧、补新、且不误删用户自建源」。
+
+### 命令行触发镜像构建（替代 step 5 手动点 Actions）
+
+上面 step 5 不一定要进 GitHub 网页，也可以直接用 `gh` CLI 一键触发（需先 `gh auth login`，账号有本仓库 repo 权限）：
+
+```bash
+# 从 main 构建并推送多架构镜像到 Docker Hub（等价于网页里 Run push_docker 工作流）
+gh workflow run push_docker --ref main
+
+# 查看刚触发的运行（拿到状态与运行链接）
+gh run list --workflow=push_docker --limit 1
+
+# 可选：盯着它跑到结束（多架构 + QEMU 模拟 arm，约 15~40 分钟）
+gh run watch
+```
+
+> - 工作流是 `workflow_dispatch`、无输入参数，固定从默认分支 `main` 构建；务必确认 `main` 已包含本次 release 提交（即 step 4 已 `git push`）。
+> - 镜像标签 `:latest / :X.Y.Z / :X.Y / :X` 写死在 `push_docker.yaml`、已随 `bump-version.js` 更新，无需在命令里指定。
+> - 构建失败多为 QEMU / 网络偶发，`gh workflow run push_docker --ref main` 重新触发一次即可。
 -->
 
 
