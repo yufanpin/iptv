@@ -27,7 +27,12 @@ function interfaceStr(url, headers, urlUserId, urlToken, profile) {
 
     case "/m3u":
     case "/interface.m3u":
-      result.contentType = "audio/x-mpegurl; charset=utf-8"
+      // 必须用 text/plain，不能用 audio/x-mpegurl。
+      // audio/x-mpegurl 是“可播放的 HLS 媒体”类型，浏览器和飞牛(fnOS)订阅会把它当成一个视频去播放，
+      // 而不是当成订阅文本去解析，导致飞牛无法订阅、浏览器直接弹出播放器。
+      // GitHub raw 提供的 .m3u 就是 text/plain，飞牛能正常订阅——这里与之对齐。
+      // 普通播放器按正文(#EXTM3U)解析、忽略 Content-Type，所以改成 text/plain 对它们零影响。
+      result.contentType = "text/plain;charset=UTF-8"
       break;
 
     default:

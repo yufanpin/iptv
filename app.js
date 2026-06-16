@@ -474,6 +474,8 @@ const server = http.createServer(async (req, res) => {
     }
     // 设置响应头
     res.setHeader('Content-Type', interfaceObj.contentType);
+    // 禁止客户端按内容嗅探覆盖声明的类型，确保飞牛/浏览器严格按 text/plain 当文本处理（与 GitHub raw 一致）
+    res.setHeader('X-Content-Type-Options', 'nosniff');
     if (routeUrlPath == "/m3u" || routeUrlPath == "/interface.m3u") {
       res.setHeader('content-disposition', "inline; filename=\"interface.m3u\"");
     }
