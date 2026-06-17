@@ -4012,19 +4012,13 @@ if(success){
             if (!trimmedName) return false;
             if (trimmedName === '未分组') return true;
 
-            const { excludeOriginalName = null, excludeCustomName = null } = options;
+            const { excludeDisplayName = null } = options;
 
-            if (getCustomGroupNames().some(groupName => groupName !== excludeCustomName && groupName === trimmedName)) {
-                return true;
-            }
-
-            return myPlaylistOriginalData.some(group => {
-                if (group.name === excludeOriginalName) {
-                    return false;
-                }
-                const effectiveName = myPlaylistConfig.groupRenameMap?.[group.name] || group.name;
-                return effectiveName === trimmedName;
-            });
+            // 只按「当前可见分组」(myPlaylistData) 判重：被移空 / 隐藏 / 删除而在列表里看不到的分组，
+            // 不再占用其分组名，避免「提示分组已存在，但左侧列表里根本找不到它」的矛盾（issue #35）。
+            // myPlaylistData 已含自定义空分组，故无需再单独对照 customGroups。
+            // 仍会拦截改名 / 新建到一个当前可见的同名分组；excludeDisplayName 用于排除正在改名的自身。
+            return myPlaylistData.some(group => group.name !== excludeDisplayName && group.name === trimmedName);
         }
 
         async function fetchExternalConfigSnapshot() {
@@ -4156,10 +4150,7 @@ if(success){
 
             const trimmed = newName.trim();
 
-            if (groupNameExists(trimmed, {
-                excludeOriginalName: isCustomGroup ? null : originalName,
-                excludeCustomName: isCustomGroup ? currentName : null
-            })) {
+            if (groupNameExists(trimmed, { excludeDisplayName: currentName })) {
                 showStatus(`分组 "${trimmed}" 已存在`, 'error');
                 return;
             }

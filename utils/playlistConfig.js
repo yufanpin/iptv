@@ -218,6 +218,18 @@ export function validateGroupConfig(groups, config) {
   }
 
   for (const group of groups) {
+    // 该源分组在「应用隐藏 / 移动 / 删除后」是否还有属于自己的可见频道。
+    // 频道被全部移走、隐藏或整组删除后，该分组在「我的频道」里已看不到，就不应再占用其分组名，
+    // 否则把别的分组改名成它、或新建同名分组时会误报「分组已存在」却在列表里找不到它（issue #35）。
+    const stillVisible = group.channels.some(channel => {
+      const channelKey = `${group.name}::${channel.id}`
+      if (config?.hiddenChannels?.includes(channelKey)) return false      // 被隐藏
+      if (config?.channelGroupMap?.[channelKey]) return false             // 被移动到别的分组
+      if (isGroupDeleted(group.name, config?.deletedGroups)) return false // 整组被删除
+      return true
+    })
+    if (!stillVisible) continue
+
     const targetName = renameMap[group.name] || group.name
     const existingGroup = occupiedNames.get(targetName)
 

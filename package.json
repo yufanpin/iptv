@@ -3,6 +3,9 @@
   "version": "3.4.0",
   "license": "GPL-3.0-only",
   "type": "module",
+  "scripts": {
+    "test": "node scripts/test-group-dedup.mjs"
+  },
   "dependencies": {
     "node-fetch": "^3.3.2",
     "puppeteer": "^24.37.1"
