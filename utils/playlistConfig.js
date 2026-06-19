@@ -3,6 +3,8 @@ import { readFileSync, existsSync, unlinkSync } from "node:fs"
 import { writeJsonFileSync } from "./fileUtil.js"
 import { dataPath } from "./paths.js"
 import { printBlue, printGreen, printYellow, printRed } from "./colorOut.js"
+import { enableTvgNormalize } from "../config.js"
+import { getCanonicalMap, normalizeKey } from "./channelNormalize.js"
 
 // 多套配置档（大分组）：每台电视一套个性化定制。
 // - default 档沿用原 my-playlist-config.json（零迁移、向后兼容老部署）
@@ -286,6 +288,9 @@ export function applyConfig(groups, config) {
     const resultGroups = {}
     const channelGroupMap = config.channelGroupMap || {}
 
+    // EPG 名称规整映射（issue #39，开关默认开）：构建一次循环内复用；getCanonicalMap 内部按文件 mtime 缓存
+    const canonicalMap = enableTvgNormalize ? getCanonicalMap() : null
+
     // 遍历所有频道
     channelMap.forEach((channel, key) => {
       // 频道标识：原始分组名::频道ID（与 hiddenChannels / channelGroupMap 同源，避免重命名/同名错乱）
@@ -323,6 +328,16 @@ export function applyConfig(groups, config) {
 
       if (!resultGroups[targetGroup]) {
         resultGroups[targetGroup] = []
+      }
+
+      // EPG 名称规整（issue #39）：把 tvg-id / tvg-name 归一到规范名（= EPG/playback.xml 里的频道名），
+      // 让异构外部源频道也能匹配上节目单。只改 tvg、不动显示名，与「单频道重命名」互补。
+      if (canonicalMap) {
+        const canonical = canonicalMap.get(normalizeKey(channel.tvgName || channel.name))
+        if (canonical) {
+          channel.tvgId = canonical
+          channel.tvgName = canonical
+        }
       }
 
       resultGroups[targetGroup].push(channel)

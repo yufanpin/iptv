@@ -1,7 +1,7 @@
 import { get302URL, getAndroidURL, getAndroidURL720p, printLoginInfo } from "./androidURL.js";
 import { readFileSync } from "./fileUtil.js";
 import { dataPath } from "./paths.js";
-import { host, pass, rateType, token, userId } from "../config.js";
+import { host, pass, rateType, token, userId, enableTvgNormalize } from "../config.js";
 import { printDebug, printGreen, printGrey, printRed, printYellow } from "./colorOut.js";
 import { readConfig, parseInterfaceTxt, applyConfig, generateM3u8, generateTxt } from "./playlistConfig.js";
 
@@ -57,7 +57,9 @@ function interfaceStr(url, headers, urlUserId, urlToken, profile) {
       // 只有存在任意自定义配置时才应用（避免首次访问解析失败）
       // 注意：旧写法 `config.channelGroupMap` 恒真（{} 也为真），会导致始终套用配置；
       // 这里改为按内容判断，并补上 groupRenameMap / customGroups / groupSortMode
+      // 另外：EPG 名称规整（issue #39）默认对所有人生效，故开关开启时也要走 applyConfig（即使无任何自定义配置）
       if (config && (
+        enableTvgNormalize ||
         Object.keys(config.channelGroupMap || {}).length > 0 ||
         Object.keys(config.channelRenameMap || {}).length > 0 ||
         Object.keys(config.channelOrder || {}).length > 0 ||

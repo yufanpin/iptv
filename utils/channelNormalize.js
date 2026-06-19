@@ -1,0 +1,122 @@
+// 频道名称 / TVG 规整（EPG 别名归一）—— issue #39
+//
+// 目的：把异构外部源五花八门的频道名（CCTV-1 / CCTV1HD / CCTV-1综合 …）的
+//   tvg-id / tvg-name 归一到「规范名」，规范名 = 本项目 EPG(playback.xml) 里真实存在的频道 id
+//   （即咪咕频道名），这样外部源频道也能蹭到对应的节目单。
+//
+// 规范名来源（构建顺序，后者可覆盖前者；用户表优先级最高）：
+//   1) cntvNames：CCTV 系列的确切咪咕规范名（静态，首次启动 EPG 还没生成时也可用）
+//   2) playback.xml 的 <channel id>：当前 EPG 全集（含卫视/港台等，权威、随更新自维护）
+//   3) 内置兜底别名：normalizeKey 兜不住的语义映射（如 CGTN 别称）
+//   4) data/channel-aliases.json：用户自定义别名表，最高优先级
+//
+// 只改 tvg-id / tvg-name，不动频道显示名（与「单频道重命名只改显示名」正好互补）。
+
+import { existsSync, readFileSync, statSync } from "node:fs"
+import { dataPath } from "./paths.js"
+import { cntvNames } from "./datas.js"
+
+// 质量/清晰度等修饰词：参与 key 比对时剔除（只影响匹配 key，不改频道显示名）
+const QUALITY = /超高清|超清|高清|标清|蓝光|HD|UHD|FHD|SD|4K|8K|HEVC|H\.?265|IPV6|IPV4|50FPS/gi
+
+// 全角转半角（含全角空格）
+function toHalfWidth(s) {
+  return s
+    .replace(/[！-～]/g, c => String.fromCharCode(c.charCodeAt(0) - 0xFEE0))
+    .replace(/　/g, " ")
+}
+
+// 把频道名归一成可比较的 key：CCTV 用频道号(及 +/欧美)做 key，其余去清晰度后缀和分隔符
+export function normalizeKey(name) {
+  if (!name) return ""
+  let s = toHalfWidth(String(name)).trim().toUpperCase()
+
+  // CCTV 专项：靠频道号识别，丢弃「综合/财经/高清」等描述词，避免同台不同写法对不上
+  const m = s.match(/CCTV[-\s]*(\d{1,2})\s*(\+|PLUS|加)?/)
+  if (m) {
+    let key = "CCTV" + m[1] + (m[2] ? "+" : "")
+    // CCTV4 有 中文国际 / 欧洲 / 美洲 三路，需区分，否则会互相覆盖
+    if (/欧洲|欧/.test(s)) key += "欧"
+    else if (/美洲|美/.test(s)) key += "美"
+    return key
+  }
+
+  s = s.replace(QUALITY, "")
+  s = s.replace(/[\s\-_·.|"'’，,、（）()\[\]【】]/g, "")
+  return s
+}
+
+// XML 实体反转义（playback.xml 里频道 id 可能含 &amp; 等）
+function decodeXml(s) {
+  return s
+    .replaceAll("&amp;", "&").replaceAll("&lt;", "<").replaceAll("&gt;", ">")
+    .replaceAll("&quot;", "\"").replaceAll("&apos;", "'")
+}
+
+// 内置兜底别名：仅用于 normalizeKey 兜不住的语义映射。{ 规范名: [别名…] }
+const BUILTIN_ALIASES = {
+  // CGTN 常见别称
+  "CGTN": ["中国国际电视台", "中国环球电视网"],
+}
+
+function safeMtime(path) {
+  try { return existsSync(path) ? statSync(path).mtimeMs : 0 } catch { return 0 }
+}
+
+let _cache = { sig: null, map: null }
+
+// 构建「归一 key → 规范名」映射；按 playback.xml / 用户别名表的 mtime 缓存，避免每次请求重读重解析
+export function getCanonicalMap() {
+  const pbPath = dataPath("playback.xml")
+  const aliasPath = dataPath("channel-aliases.json")
+  const sig = `${safeMtime(pbPath)}|${safeMtime(aliasPath)}`
+  if (_cache.sig === sig && _cache.map) return _cache.map
+
+  const map = new Map()
+  const seed = (canonicalName) => {
+    const k = normalizeKey(canonicalName)
+    if (k && !map.has(k)) map.set(k, canonicalName) // 先到先得，保持确定性
+  }
+
+  // 1) CCTV 确切规范名
+  for (const name of Object.keys(cntvNames)) seed(name)
+
+  // 2) 当前 EPG 频道全集
+  if (existsSync(pbPath)) {
+    try {
+      const xml = readFileSync(pbPath, "utf-8")
+      const re = /<channel\s+id="([^"]+)"/g
+      let m
+      while ((m = re.exec(xml)) !== null) seed(decodeXml(m[1]))
+    } catch { /* 读取/解析失败则忽略，退化为仅 cntvNames */ }
+  }
+
+  // 3) 内置兜底别名
+  for (const [canonical, aliases] of Object.entries(BUILTIN_ALIASES)) {
+    seed(canonical)
+    for (const a of aliases) { const k = normalizeKey(a); if (k && !map.has(k)) map.set(k, canonical) }
+  }
+
+  // 4) 用户别名表（最高优先级，覆盖前面的）
+  if (existsSync(aliasPath)) {
+    try {
+      const user = JSON.parse(readFileSync(aliasPath, "utf-8"))
+      for (const [canonical, aliases] of Object.entries(user)) {
+        const ck = normalizeKey(canonical)
+        if (ck) map.set(ck, canonical)
+        for (const a of (Array.isArray(aliases) ? aliases : [])) {
+          const k = normalizeKey(a)
+          if (k) map.set(k, canonical)
+        }
+      }
+    } catch { /* 用户表损坏则忽略 */ }
+  }
+
+  _cache = { sig, map }
+  return map
+}
+
+// 把一个频道名归一到规范名；无对应规范名时返回 null（保持原样、不误改）
+export function normalizeTvgName(name) {
+  return getCanonicalMap().get(normalizeKey(name)) || null
+}

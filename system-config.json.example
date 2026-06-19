@@ -9,5 +9,6 @@
   "enableH265": true,
   "programInfoUpdateInterval": "8",
   "refreshToken": true,
-  "adminPath": "admin"
+  "adminPath": "admin",
+  "enableTvgNormalize": true
 }

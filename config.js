@@ -40,7 +40,7 @@ function sanitizeSegment(value, fallback) {
 // ESM 命名导出是实时绑定，重新赋值后所有 import 方都会读到新值。
 // 注意：port、programInfoUpdateInterval 在 server.listen / setInterval 时已被读取，
 // 热更新不会改变已启动的监听端口与定时器周期，这两项仍需重启生效。
-let userId, token, port, host, rateType, debug, pass, enableHDR, enableH265, programInfoUpdateInterval, refreshToken, adminPath, externalLogoBase
+let userId, token, port, host, rateType, debug, pass, enableHDR, enableH265, programInfoUpdateInterval, refreshToken, adminPath, externalLogoBase, enableTvgNormalize
 // 内容开关：咪咕核心 / 内置单频道源 / 内置订阅源。默认全开（老用户零感知）
 let enableMigu, enableBuiltInSources, enableBuiltInSubscriptions
 
@@ -76,6 +76,8 @@ function applyConfig(systemConfig) {
   externalLogoBase = systemConfig.externalLogoBase !== undefined
     ? systemConfig.externalLogoBase
     : (process.env.mexternalLogoBase !== undefined ? process.env.mexternalLogoBase : "https://live.fanmingming.com/tv/")
+  // EPG 名称规整（issue #39）：把异构源频道的 tvg-id/tvg-name 归一到规范名（EPG 频道名），默认开。
+  enableTvgNormalize = systemConfig.enableTvgNormalize !== undefined ? systemConfig.enableTvgNormalize : parseBool(process.env.menableTvgNormalize, true)
 
   // 空白模式总开关：开启后下面三项内容开关「默认」翻转为关（一行得到空白 docker）。
   // 优先级：细粒度开关显式值 > 总开关推出的默认 > 全开。所以可 mblank=true + menableMigu=true 单独留咪咕。
@@ -94,7 +96,7 @@ applyConfig(loadSystemConfig())
 // 重新加载系统配置（保存系统配置后调用，避免必须重启进程）
 function reloadConfig() {
   applyConfig(loadSystemConfig())
-  return { userId, token, port, host, rateType, pass, enableHDR, enableH265, programInfoUpdateInterval, refreshToken, adminPath, externalLogoBase, enableMigu, enableBuiltInSources, enableBuiltInSubscriptions }
+  return { userId, token, port, host, rateType, pass, enableHDR, enableH265, programInfoUpdateInterval, refreshToken, adminPath, externalLogoBase, enableTvgNormalize, enableMigu, enableBuiltInSources, enableBuiltInSubscriptions }
 }
 
-export { userId, token, port, host, rateType, debug, pass, enableHDR, programInfoUpdateInterval, enableH265, refreshToken, adminPath, externalLogoBase, enableMigu, enableBuiltInSources, enableBuiltInSubscriptions, reloadConfig, sanitizeSegment }
+export { userId, token, port, host, rateType, debug, pass, enableHDR, programInfoUpdateInterval, enableH265, refreshToken, adminPath, externalLogoBase, enableTvgNormalize, enableMigu, enableBuiltInSources, enableBuiltInSubscriptions, reloadConfig, sanitizeSegment }
